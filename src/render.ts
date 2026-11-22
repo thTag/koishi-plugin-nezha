@@ -41,7 +41,7 @@ export async function buildHtml(config: Config, name: string, data: Record<strin
   }
   const logo = await logoDataUri()
   if (logo) tpl = tpl.replace(LOGO_RE, 'src="' + logo + '"')
-  return renderTemplate(tpl, data)
+  return renderTemplate(tpl, { site_name: '哪吒监控', ...data })
 }
 
 export async function renderCard(
@@ -105,9 +105,21 @@ export function detailData(server: ServerInfo) {
       platform_version: server.platformVersion,
       net_in: formatBytes(server.netInTransfer),
       net_out: formatBytes(server.netOutTransfer),
-      last_active: server.lastActive,
+      net_in_speed: formatBytes(server.netInSpeed) + '/s',
+      net_out_speed: formatBytes(server.netOutSpeed) + '/s',
+      last_active: formatLastActive(server.lastActive),
       country_code: (server.geoipCountry || 'un').toLowerCase(),
-      cpu_cores: 'N/A',
+      arch: server.arch || 'N/A',
+      cpu_cores: server.cpuCores || 'N/A',
+      boot_time: server.bootTime ? formatDateTime(new Date(server.bootTime * 1000)) : 'N/A',
+      load1: server.load1.toFixed(2),
+      load5: server.load5.toFixed(2),
+      load15: server.load15.toFixed(2),
+      tcp_conn: server.tcpConn,
+      udp_conn: server.udpConn,
+      process_count: server.processCount,
+      swap_used: formatBytes(server.swapUsed),
+      swap_total: formatBytes(server.swapTotal),
     },
     update_time: formatDateTime(),
   }
@@ -276,6 +288,12 @@ export function historyData(analysis: HistoryAnalysis, options: HistoryOptions) 
 
 /* ------------------------------ 文字降级 ------------------------------ */
 
+function formatLastActive(raw: string) {
+  if (!raw) return '未知'
+  const date = new Date(raw)
+  return Number.isNaN(date.getTime()) ? raw : formatDateTime(date)
+}
+
 export function statusText(servers: ServerInfo[]) {
   const online = servers.filter((s) => s.online).length
   const lines = [
@@ -305,9 +323,15 @@ export function detailText(server: ServerInfo) {
       + formatBytes(server.memUsed) + ' / ' + formatBytes(server.memTotal) + ')',
     '磁盘：' + percent(server.diskUsed, server.diskTotal).toFixed(1) + '% ('
       + formatBytes(server.diskUsed) + ' / ' + formatBytes(server.diskTotal) + ')',
+    '架构：' + (server.arch || 'N/A') + ' · 核心数：' + (server.cpuCores || 'N/A'),
+    '负载：' + server.load1.toFixed(2) + ' / ' + server.load5.toFixed(2) + ' / ' + server.load15.toFixed(2),
+    '连接：TCP ' + server.tcpConn + ' · UDP ' + server.udpConn + ' · 进程 ' + server.processCount,
+    'Swap：' + formatBytes(server.swapUsed) + ' / ' + formatBytes(server.swapTotal),
+    '速率：↓ ' + formatBytes(server.netInSpeed) + '/s ↑ ' + formatBytes(server.netOutSpeed) + '/s',
     '入站流量：' + formatBytes(server.netInTransfer),
     '出站流量：' + formatBytes(server.netOutTransfer),
-    '最后活跃：' + (server.lastActive || '未知'),
+    '启动时间：' + (server.bootTime ? formatDateTime(new Date(server.bootTime * 1000)) : 'N/A'),
+    '最后活跃：' + formatLastActive(server.lastActive),
   ].join('\n')
 }
 

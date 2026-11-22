@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-nezha",
-  "version": "0.1.0",
-  "description": "哪吒监控（Nezha）面板查询：服务器状态、详情、服务监控与历史指标，支持卡片出图",
+  "version": "0.2.0",
+  "description": "哪吒监控 V2 面板查询：服务器状态/详情/服务监控/在线率/告警/历史指标，支持卡片出图与定时推送",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "pretest": "npm run build",
     "test": "node test/local.cjs",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "test:live": "node test/live.mjs"
   },
   "keywords": [
     "koishi",
@@ -59,6 +60,10 @@
   "devDependencies": {
     "@koishijs/plugin-mock": "^2.6.6",
     "@types/node": "^26.6.6",
+    "@types/ws": "^8.18.2",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "ws": "^8.23.0"
   }
 }

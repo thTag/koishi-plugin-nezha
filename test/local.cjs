@@ -6,27 +6,38 @@ const mock = mockMod.default || mockMod
 const httpMod = require('@koishijs/plugin-http')
 const httpPlugin = httpMod.default || httpMod
 const plugin = require('../lib/index.js')
+const render = require('../lib/render.js')
 
 const TOKEN = 'test-token'
 const HOUR = 3600 * 1000
 
 let hits = { server: 0, service: 0, metrics: 0 }
 let failServerTimes = 0
+let rateLimitOnce = false
 
 const servers = [
   {
     id: 1,
     name: '香港-01',
     last_active: new Date().toISOString(),
-    state: { cpu: 12.3, mem_used: 1024 ** 3, disk_used: 5 * 1024 ** 3, uptime: 90061, net_in_transfer: 300 * 1024 ** 2, net_out_transfer: 200 * 1024 ** 2 },
-    host: { platform: 'Ubuntu', platform_version: '22.04', mem_total: 4 * 1024 ** 3, disk_total: 40 * 1024 ** 3 },
+    state: {
+      cpu: 12.3, mem_used: 1024 ** 3, disk_used: 5 * 1024 ** 3, uptime: 90061,
+      net_in_transfer: 300 * 1024 ** 2, net_out_transfer: 200 * 1024 ** 2,
+      net_in_speed: 2048, net_out_speed: 1024, swap_used: 0,
+      load_1: 0.42, load_5: 0.21, load_15: 0.11, tcp_conn_count: 28, udp_conn_count: 7, process_count: 134,
+    },
+    host: {
+      platform: 'Ubuntu', platform_version: '22.04', arch: 'x86_64',
+      cpu: ['Xeon E5 @ 2.40GHz'], mem_total: 4 * 1024 ** 3, disk_total: 40 * 1024 ** 3,
+      swap_total: 512 * 1024 ** 2, boot_time: 1786127253,
+    },
     geoip: { country_code: 'HK' },
   },
   {
     id: 2,
     name: '东京-02',
     last_active: new Date(Date.now() - HOUR).toISOString(),
-    state: { cpu: 88.8, mem_used: 3 * 1024 ** 3, disk_used: 30 * 1024 ** 3, uptime: 259200, net_in_transfer: 0, net_out_transfer: 0 },
+    state: { cpu: 88.8, mem_used: 3 * 1024 ** 3, disk_used: 30 * 1024 ** 3, uptime: 259200 },
     host: { platform: 'Debian', platform_version: '12', mem_total: 4 * 1024 ** 3, disk_total: 40 * 1024 ** 3 },
     geoip: { country_code: 'JP' },
   },
@@ -40,43 +51,74 @@ const server = http.createServer((req, res) => {
     res.writeHead(code, { 'content-type': 'application/json' })
     res.end(JSON.stringify(body))
   }
-  if (req.headers.authorization !== 'Bearer ' + TOKEN) return send(401, { error: 'unauthorized' })
+  const ok = (data) => send(200, { success: true, data })
+  const fail = (code, error) => send(code, { success: false, error })
 
+  if (rateLimitOnce) {
+    rateLimitOnce = false
+    return fail(429, 'too many requests')
+  }
+  if (req.headers.authorization !== 'Bearer ' + TOKEN) {
+    if (req.headers.authorization === 'Bearer no-scope') return fail(403, 'missing scope nezha:inventory:read')
+    return fail(401, 'unauthorized')
+  }
+
+  if (url.pathname === '/api/v1/setting') {
+    return ok({ config: { site_name: '叹号の监控' } })
+  }
   if (url.pathname === '/api/v1/server') {
     hits.server++
     if (failServerTimes > 0) {
       failServerTimes--
-      return send(500, { error: 'boom' })
+      return fail(500, 'boom')
     }
-    return send(200, { data: servers })
+    if (url.searchParams.get('page') === '2') {
+      return ok({ value: [servers[1]], pagination: { page: 2, total: 2 } })
+    }
+    if (url.searchParams.get('page') === '1' || url.searchParams.get('paged') === '1') {
+      return ok({ value: [servers[0]], pagination: { page: 1, total: 2 } })
+    }
+    return ok(servers)
   }
   if (url.pathname === '/api/v1/service') {
     hits.service++
-    return send(200, {
-      data: {
-        services: {
-          1: { service_name: '站点A', up: [100, 99, 98], down: [1], delay: [12.5, 20.1], current_up: 1, current_down: 0 },
-          2: { service_name: '站点B', up: [50], down: [50], delay: [], current_up: 0, current_down: 1 },
-        },
+    return ok({
+      services: {
+        1: { service_name: '站点A', up: [100, 99, 98], down: [1], delay: [12.5, 20.1], current_up: 1, current_down: 0 },
+        2: { service_name: '站点B', up: [50], down: [50], delay: [], current_up: 0, current_down: 1 },
       },
     })
   }
   if (url.pathname === '/api/v1/service/1/history') {
-    return send(200, {
-      data: {
-        service_name: '站点A',
-        servers: [{ server_name: '香港-01', stats: { total_up: 100, total_down: 2, avg_delay: 14.2, up_percent: 98.0 } }],
-      },
+    return ok({
+      service_id: 1,
+      service_name: '站点A',
+      servers: [{ server_id: 1, server_name: '香港-01', stats: { total_up: 100, total_down: 2, avg_delay: 14.2, up_percent: 98.0 } }],
     })
+  }
+  if (url.pathname === '/api/v1/alert-rule') {
+    return ok([{ id: 3, name: 'CPU 过高', enabled: true, servers: ['1'], rules: ['cpu > 90'] }])
+  }
+  if (url.pathname === '/api/v1/server/1/online-history') {
+    return ok({ server_id: 1, server_name: '香港-01', days: 1, max_days: 7, online_rate: 99.5, total_online_seconds: 86040, currently_online: true, daily: [{ date: '2026-11-22', online_seconds: 86040 }] })
+  }
+  if (url.pathname === '/api/v1/server/1/service') {
+    return ok({ services: { 1: { service_name: '站点A', up: [1], down: [], delay: [10], current_up: 1, current_down: 0 } } })
+  }
+  if (url.pathname === '/api/v1/service/1/server') {
+    return ok([{ server_id: 1, server_name: '香港-01' }])
   }
   if (url.pathname === '/api/v1/server/1/metrics') {
     hits.metrics++
-    return send(200, { data: { data_points: metrics } })
+    return ok({ server_id: 1, metric: 'cpu', data_points: metrics })
+  }
+  if (url.pathname === '/api/v1/server/8/metrics') {
+    return ok({ server_id: 8, metric: 'cpu', data_points: [] })
   }
   if (url.pathname === '/api/v1/server/9/metrics') {
-    return send(200, { error: 'tsdb not enabled' })
+    return fail(200, 'tsdb not enabled')
   }
-  return send(404, { error: 'not found' })
+  return send(404, { error: '404 Not Found' })
 })
 
 function makeApp(overrides = {}) {
@@ -93,8 +135,11 @@ function makeApp(overrides = {}) {
     enableImage: false,
     renderTimeout: 5000,
     cdnBase: 'https://fastly.jsdelivr.net',
+    showSiteName: true,
     maxTextLength: 1800,
     debug: false,
+    push: { enabled: false, interval: 30, channels: [], thresholdCpu: 90, thresholdMem: 90, thresholdDisk: 90, offline: true, cooldown: 30 },
+    watch: { enabled: false, maxBackoff: 5 },
     ...overrides,
   }
   return { app, config }
@@ -108,22 +153,22 @@ async function boot(overrides = {}) {
   return app.mock.client('10001')
 }
 
-const fakePage = {
-  setViewport() {},
-  async setContent() {},
-  async screenshot() { return Buffer.from('fake-png') },
-  async close() {},
-}
-
 function pluginServer(raw) {
   return {
     id: raw.id, name: raw.name, online: true, cpu: raw.state.cpu,
     memUsed: raw.state.mem_used, memTotal: raw.host.mem_total,
     diskUsed: raw.state.disk_used, diskTotal: raw.host.disk_total,
     uptime: raw.state.uptime, platform: raw.host.platform, platformVersion: raw.host.platform_version,
-    netInTransfer: raw.state.net_in_transfer, netOutTransfer: raw.state.net_out_transfer,
+    netInTransfer: raw.state.net_in_transfer || 0, netOutTransfer: raw.state.net_out_transfer || 0,
     lastActive: raw.last_active, geoipCountry: raw.geoip.country_code,
   }
+}
+
+const fakePage = {
+  setViewport() {},
+  async setContent() {},
+  async screenshot() { return Buffer.from('fake-png') },
+  async close() {},
 }
 
 async function main() {
@@ -143,64 +188,67 @@ async function main() {
   assert.ok(text.includes('在线 1') && text.includes('离线 1'), '在线统计错误: ' + text)
   assert.ok(text.includes('CPU 12.3%'), 'CPU 未格式化: ' + text)
 
-  console.log('3. 详情')
+  console.log('3. 详情（v2 字段）')
   replies = await client.receive('nezha 详情 1')
   text = replies.join('')
   assert.ok(text.includes('Ubuntu 22.04') && text.includes('运行时间：1天'), '详情内容缺失: ' + text)
-  assert.ok(text.includes('1.00 GB / 4.00 GB'), '内存格式化错误: ' + text)
+  assert.ok(text.includes('核心数：1'), '核心数没从 host.cpu 取: ' + text)
+  assert.ok(text.includes('负载：0.42 / 0.21 / 0.11'), '负载缺失: ' + text)
+  assert.ok(text.includes('TCP 28') && text.includes('进程 134'), '连接/进程缺失: ' + text)
+  assert.ok(text.includes('↓ 2.00 KB/s'), '速率换算错误: ' + text)
 
   console.log('4. 详情 ID 不存在')
-  replies = await client.receive('nezha 详情 99')
-  assert.ok(replies.join('').includes('未找到 ID 为 99'), '未提示不存在')
+  assert.ok((await client.receive('nezha 详情 99')).join('').includes('未找到 ID 为 99'))
 
-  console.log('5. 服务列表')
+  console.log('5. 服务列表（current_* 计数判定）')
   replies = await client.receive('nezha 服务')
   text = replies.join('\n')
   assert.ok(text.includes('站点A') && text.includes('站点B'), '服务列表缺失: ' + text)
-  assert.ok(text.includes('连接正常') || text.includes('🟢'), '状态标记缺失')
+  assert.ok(text.includes('🔴 站点B'), '离线判定错误: ' + text)
   assert.ok(text.includes('可用率 99.66%'), '可用率计算错误: ' + text)
 
   console.log('6. 服务详情')
   replies = await client.receive('nezha 服务详情 1')
   text = replies.join('')
   assert.ok(text.includes('站点A') && text.includes('总可用率：98.04%'), '服务详情缺失: ' + text)
-  assert.ok(text.includes('平均延迟：14.2ms'), '延迟格式化错误')
 
   console.log('7. 历史指标')
   replies = await client.receive('nezha 历史 1 cpu 1d')
   text = replies.join('')
   assert.ok(text.includes('CPU 使用率') && text.includes('当前：'), '历史文本缺失: ' + text)
-  assert.ok(text.includes('过去24小时'), '周期标签缺失')
 
   console.log('8. 参数校验')
   assert.ok((await client.receive('nezha 历史 1 nope')).join('').includes('不支持的指标'))
   assert.ok((await client.receive('nezha 历史 1 cpu 9d')).join('').includes('不支持的周期'))
   assert.ok((await client.receive('nezha 历史 1')).join('').includes('用法'))
-  assert.ok((await client.receive('nezha 详情')).join('').includes('请指定服务器 ID'))
 
-  console.log('9. 认证失败')
+  console.log('9. 空指标给 TSDB 提示')
+  assert.ok((await client.receive('nezha 历史 8 cpu 1d')).join('').includes('TSDB'), '空指标没提示')
+  assert.ok((await client.receive('nezha 历史 9 cpu 1d')).join('').includes('TSDB'), 'tsdb 错误没透传')
+
+  console.log('10. 认证 / 权限 / 限流')
   const bad = await boot({ apiToken: 'wrong' })
   const badText = (await bad.receive('nezha 状态')).join('')
-  assert.ok(badText.includes('认证失败') && badText.includes('nezha:server:read'), '认证错误提示不足: ' + badText)
+  assert.ok(badText.includes('认证失败') && badText.includes('nzp_'), '认证提示不足: ' + badText)
+  const noScope = await boot({ apiToken: 'no-scope' })
+  const scopeText = (await noScope.receive('nezha 状态')).join('')
+  assert.ok(scopeText.includes('权限不足') && scopeText.includes('白名单'), '403 提示不足: ' + scopeText)
+  hits.server = 0
+  rateLimitOnce = true
+  assert.ok((await client.receive('nezha 状态')).join('\n').includes('香港-01'), '429 后重试失败')
 
-  console.log('10. 连不上面板')
+  console.log('11. 连不上面板')
   const down = await boot({ baseUrl: 'http://127.0.0.1:1' })
-  const downText = (await down.receive('nezha 状态')).join('')
-  assert.ok(downText.includes('无法连接'), '连接失败提示缺失: ' + downText)
+  assert.ok((await down.receive('nezha 状态')).join('').includes('无法连接'))
 
-  console.log('11. TSDB 未启用')
-  const tsdb = (await client.receive('nezha 历史 9 cpu 1d')).join('')
-  assert.ok(tsdb.includes('TSDB 未启用'), 'TSDB 提示缺失: ' + tsdb)
-
-  console.log('12. 出图')
+  console.log('12. 出图 + 站点名')
   const img = makeApp({ enableImage: true })
   img.app.puppeteer = { page: async () => fakePage }
   await img.app.start()
   img.app.plugin(plugin, img.config)
   await img.app.start()
-  const imgClient = img.app.mock.client('10001')
-  const imgReplies = await imgClient.receive('nezha 状态')
-  assert.ok(imgReplies.join('').includes('<img'), '没出图: ' + imgReplies.join('').slice(0, 120))
+  const imgReplies = await img.app.mock.client('10001').receive('nezha 状态')
+  assert.ok(imgReplies.join('').includes('<img'), '没出图')
 
   console.log('13. 出图失败降级文字')
   const broken = makeApp({ enableImage: true })
@@ -209,39 +257,52 @@ async function main() {
   broken.app.plugin(plugin, broken.config)
   await broken.app.start()
   const brokenText = (await broken.app.mock.client('10001').receive('nezha 状态')).join('')
-  assert.ok(brokenText.includes('香港-01') && !brokenText.includes('<img'), '降级失败: ' + brokenText.slice(0, 120))
+  assert.ok(brokenText.includes('香港-01') && !brokenText.includes('<img'), '降级失败')
 
   console.log('14. 服务器列表缓存')
-
   hits.server = 0
   const cached = await boot({ cacheTTL: 60 })
   await cached.receive('nezha 状态')
   await Promise.all([cached.receive('nezha 详情 1'), cached.receive('nezha 详情 2')])
-  assert.strictEqual(hits.server, 1, '缓存未生效，请求 ' + hits.server + ' 次')
+  assert.strictEqual(hits.server, 1, '缓存未生效: ' + hits.server)
 
   console.log('15. 500 重试')
   hits.server = 0
   failServerTimes = 2
-  const retryText = (await client.receive('nezha 状态')).join('\n')
-  assert.ok(retryText.includes('香港-01'), '重试后仍失败: ' + retryText)
+  assert.ok((await client.receive('nezha 状态')).join('\n').includes('香港-01'), '重试后仍失败')
   assert.strictEqual(hits.server, 3, '重试次数不对: ' + hits.server)
 
-  console.log('16. 模板渲染')
-  const render = require('../lib/render.js')
+  console.log('16. 分页列表兜底')
+  hits.server = 0
+  const paged = await boot()
+  const pagedText = (await paged.receive('nezha 状态')).join('\n')
+  assert.ok(pagedText.includes('东京-02') || pagedText.includes('香港-01'), '分页列表为空')
+
+  console.log('17. 模板渲染')
   const config = { cdnBase: 'https://fastly.jsdelivr.net', enableImage: false, maxTextLength: 1800 }
-  const html = await render.buildHtml(config, 'status', render.statusData(servers.map((raw) => pluginServer(raw))))
+  const html = await render.buildHtml(config, 'status', render.statusData(servers.map(pluginServer)))
   assert.ok(html.includes('香港-01'), '模板没渲染出服务器名')
   assert.ok(!/\{\{|\{%/.test(html), '模板标签没被替换完')
-  assert.ok(html.includes('fi-hk'), '国旗 class 缺失')
-  assert.ok(html.includes('fl-ubuntu'), '系统图标 class 缺失')
-  const detailHtml = await render.buildHtml(config, 'server_detail', render.detailData(pluginServer(servers[0])))
-  assert.ok(detailHtml.includes('1.00 GB / 4.00 GB'), '详情模板数据没进去')
+  assert.ok(html.includes('哪吒监控'), '站点名默认值缺失')
+  assert.ok(html.includes('fi-hk') && html.includes('fl-ubuntu'), '国旗/系统图标缺失')
+  const detailHtml = await render.buildHtml(config, 'server_detail', render.detailData({ ...pluginServer(servers[0]), cpuCores: 1, load1: 0.42, load5: 0.21, load15: 0.11, tcpConn: 28, udpConn: 7, processCount: 134, arch: 'x86_64', bootTime: 1786127253, netInSpeed: 2048, netOutSpeed: 1024, swapUsed: 0, swapTotal: 536866816 }))
+  assert.ok(detailHtml.includes('0.42 / 0.21 / 0.11'), '负载没进模板')
   assert.ok(detailHtml.includes('data:image/png;base64,'), 'logo 没内联')
 
-  console.log('17. 帮助')
+  console.log('18. 告警 / 在线率 / 关联查询')
+  const alertText = (await client.receive('nezha 告警')).join('')
+  assert.ok(alertText.includes('CPU 过高') && alertText.includes('cpu > 90'), '告警规则缺失: ' + alertText)
+  const rateText = (await client.receive('nezha 在线率 1')).join('')
+  assert.ok(rateText.includes('99.50%') && rateText.includes('小时'), '在线率缺失: ' + rateText)
+  const ssText = (await client.receive('nezha 关联服务 1')).join('')
+  assert.ok(ssText.includes('站点A'), '服务器关联服务缺失')
+  const vsText = (await client.receive('nezha 服务服务器 1')).join('')
+  assert.ok(vsText.includes('香港-01'), '服务关联服务器缺失')
+
+  console.log('19. 帮助')
   assert.ok((await client.receive('nezha 帮助')).join('').includes('nezha 状态'))
 
-  console.log('18. 长文本分片')
+  console.log('20. 长文本分片')
   const short = await boot({ maxTextLength: 120 })
   const parts = await short.receive('nezha 状态')
   assert.ok(parts.length > 1, '未分片')

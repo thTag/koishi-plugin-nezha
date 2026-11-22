@@ -1,18 +1,15 @@
 import { Context } from 'koishi'
 import { Agent as HttpsAgent } from 'node:https'
-import type { Config, MetricPoint, ServerInfo, ServiceDetail, ServiceItem, ServiceServerStat } from './types'
+import type {
+  Config,
+  MetricPoint,
+  NezhaErrorKind,
+  ServerInfo,
+  ServiceDetail,
+  ServiceItem,
+  ServiceServerStat,
+} from './types'
 import { percent } from './format'
-
-export type NezhaErrorKind =
-  | 'config'
-  | 'auth'
-  | 'network'
-  | 'timeout'
-  | 'server'
-  | 'http'
-  | 'json'
-  | 'tsdb'
-  | 'nodata'
 
 export class NezhaError extends Error {
   constructor(message: string, readonly kind: NezhaErrorKind, readonly status?: number) {
@@ -23,6 +20,8 @@ export class NezhaError extends Error {
 
 const ONLINE_THRESHOLD_SECONDS = 300
 const MAX_RETRY_ATTEMPTS = 3
+const MAX_PAGES = 20
+const SITE_NAME_TTL = 10 * 60 * 1000
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
@@ -38,11 +37,25 @@ function safeInt(value: any, fallback = 0) {
 
 function isRetryable(error: unknown) {
   if (!(error instanceof NezhaError)) return true
-  return !['config', 'auth', 'json'].includes(error.kind)
+  return !['config', 'auth', 'forbidden', 'json'].includes(error.kind)
+}
+
+/**
+ * 面板 v2 的返回是 { success, data } 信封，失败是 { success:false, error } 或纯 { error }。
+ * 这里统一拆出 data，并在 success=false 时抛错，避免上层各写一份判断。
+ */
+function unwrap(body: any): any {
+  if (body && typeof body === 'object' && body.success === false) {
+    const message = typeof body.error === 'string' && body.error ? body.error : '面板返回失败'
+    throw new NezhaError(message, /tsdb|timescale/i.test(message) ? 'tsdb' : 'http')
+  }
+  if (body && typeof body === 'object' && 'data' in body && 'success' in body) return body.data
+  return body
 }
 
 export class NezhaApi {
   private cache?: { at: number; servers: ServerInfo[] }
+  private setting?: { at: number; value: { siteName: string; tsdbEnabled: boolean } }
 
   constructor(private ctx: Context, private config: Config) {}
 
@@ -69,8 +82,14 @@ export class NezhaApi {
   private mapError(error: any): NezhaError {
     if (error instanceof NezhaError) return error
     const status = error?.response?.status
-    if (status === 401 || status === 403) {
-      return new NezhaError('认证失败，请检查 API Token 是否正确、是否过期', 'auth', status)
+    if (status === 401) {
+      return new NezhaError('认证失败：API Token 无效、已过期，或 Authorization 头格式不对', 'auth', status)
+    }
+    if (status === 403) {
+      return new NezhaError('权限不足：Token 缺少所需的 scope，或该服务器不在白名单内', 'forbidden', status)
+    }
+    if (status === 429) {
+      return new NezhaError('请求过于频繁，面板做了限流，稍后再试或调大 cacheTTL', 'rate', status)
     }
     if (status && status >= 500) {
       return new NezhaError('面板返回服务器错误: ' + status, 'server', status)
@@ -98,7 +117,7 @@ export class NezhaApi {
     return new NezhaError('请求处理失败: ' + message.trim(), 'network')
   }
 
-  private async request(path: string, admin = false): Promise<any> {
+  private async request(path: string, admin = false, retryOn429 = true): Promise<any> {
     if (!this.baseUrl) throw new NezhaError('未配置面板地址（baseUrl）', 'config')
     if (admin && !this.config.adminToken) {
       throw new NezhaError('管理员 Token 未配置，无法执行管理员操作', 'config')
@@ -109,7 +128,12 @@ export class NezhaApi {
     try {
       body = await this.ctx.http.get(url, this.requestConfig(admin))
     } catch (error) {
-      throw this.mapError(error)
+      const mapped = this.mapError(error)
+      if (mapped.kind === 'rate' && retryOn429) {
+        await sleep(1500)
+        return this.request(path, admin, false)
+      }
+      throw mapped
     }
     if (typeof body === 'string') {
       try {
@@ -121,10 +145,66 @@ export class NezhaApi {
     if (body === null || typeof body !== 'object') {
       throw new NezhaError('响应格式错误，请检查面板地址是否正确', 'json')
     }
-    if (typeof body.error === 'string' && body.error) {
+    // 部分路由的 404 是纯 { error } 文本
+    if (typeof body.error === 'string' && body.error && !('data' in body) && !('success' in body)) {
       throw new NezhaError(body.error, 'http')
     }
-    return body
+    return unwrap(body)
+  }
+
+  /** 站点名与 TSDB 开关，10 分钟缓存；拿不到就回退 */
+  async fetchSetting(): Promise<{ siteName: string; tsdbEnabled: boolean }> {
+    const now = Date.now()
+    if (this.setting && now - this.setting.at < SITE_NAME_TTL) return this.setting.value
+    const fallback = { siteName: '', tsdbEnabled: false }
+    try {
+      const data = await this.request('/api/v1/setting')
+      const value = {
+        siteName: String(data?.config?.site_name || data?.site_name || '').trim(),
+        tsdbEnabled: Boolean(data?.tsdb_enabled ?? data?.config?.tsdb_enabled),
+      }
+      this.setting = { at: now, value }
+      return value
+    } catch {
+      this.setting = { at: now, value: fallback }
+      return fallback
+    }
+  }
+
+  /** 卡片标题用的站点名；showSiteName 关掉时返回空 */
+  async fetchSiteName(): Promise<string> {
+    if (!this.config.showSiteName) return ''
+    return (await this.fetchSetting()).siteName
+  }
+
+  async fetchAlertRules(): Promise<any[]> {
+    try {
+      const data = await this.request('/api/v1/alert-rule')
+      const list = Array.isArray(data) ? data : data?.value ?? data?.rules ?? []
+      return Array.isArray(list) ? list : []
+    } catch (error) {
+      // 老版本面板没有这个路由
+      if (error instanceof NezhaError && (error.status === 404 || error.kind === 'http')) return []
+      throw error
+    }
+  }
+
+  async fetchOnlineHistory(id: number, days = 1): Promise<any> {
+    return this.request('/api/v1/server/' + id + '/online-history?days=' + Math.max(1, Math.trunc(days)))
+  }
+
+  async fetchServerServices(id: number): Promise<ServiceItem[]> {
+    return this.parseServiceList(await this.request('/api/v1/server/' + id + '/service'))
+  }
+
+  /** 面板没有 /service/{id}/server 路由，从 history 的 servers 里取关联服务器 */
+  async fetchServiceServers(id: number): Promise<Array<{ id: number; name: string }>> {
+    const data = await this.request('/api/v1/service/' + id + '/history?period=1d')
+    const list = Array.isArray(data?.servers) ? data.servers : []
+    return list.map((raw: any) => ({
+      id: safeInt(raw?.server_id ?? raw?.id),
+      name: raw?.server_name || raw?.name || '未知服务器',
+    }))
   }
 
   parseServer(raw: any): ServerInfo {
@@ -142,6 +222,15 @@ export class NezhaApi {
       name: raw?.name || '未命名',
       online,
       cpu: safeFloat(state.cpu),
+      cpuCores: Array.isArray(host.cpu) ? host.cpu.length : safeInt(host.cpu),
+      swapUsed: safeInt(state.swap_used),
+      swapTotal: safeInt(host.swap_total),
+      load1: safeFloat(state.load_1),
+      load5: safeFloat(state.load_5),
+      load15: safeFloat(state.load_15),
+      tcpConn: safeInt(state.tcp_conn_count),
+      udpConn: safeInt(state.udp_conn_count),
+      processCount: safeInt(state.process_count),
       memUsed: safeInt(state.mem_used),
       memTotal: safeInt(host.mem_total),
       diskUsed: safeInt(state.disk_used),
@@ -149,11 +238,34 @@ export class NezhaApi {
       uptime: safeInt(state.uptime),
       platform: host.platform || 'N/A',
       platformVersion: host.platform_version || '',
+      arch: host.arch || '',
+      bootTime: safeInt(host.boot_time),
       netInTransfer: safeInt(state.net_in_transfer),
       netOutTransfer: safeInt(state.net_out_transfer),
+      netInSpeed: safeInt(state.net_in_speed),
+      netOutSpeed: safeInt(state.net_out_speed),
       lastActive,
       geoipCountry: geoip.country_code || '',
     }
+  }
+
+  /** 兼容两种列表形态：data 直接是数组，或分页的 { value, pagination } */
+  private async fetchServerPages(): Promise<any[]> {
+    const first = await this.request('/api/v1/server')
+    if (Array.isArray(first)) return first
+    if (Array.isArray(first?.value)) {
+      const list = first.value.slice()
+      const total = safeInt(first?.pagination?.total, list.length)
+      for (let page = 2; page <= MAX_PAGES && list.length < total; page++) {
+        const next = await this.request('/api/v1/server?page=' + page)
+        const chunk = Array.isArray(next?.value) ? next.value : []
+        if (!chunk.length) break
+        list.push(...chunk)
+      }
+      return list
+    }
+    if (Array.isArray(first?.servers)) return first.servers
+    throw new NezhaError('服务器列表格式异常，请确认 baseUrl 指向哪吒监控面板', 'json')
   }
 
   async fetchServers(force = false): Promise<ServerInfo[]> {
@@ -166,11 +278,7 @@ export class NezhaApi {
     let lastError: unknown
     for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt++) {
       try {
-        const body = await this.request('/api/v1/server')
-        const list = Array.isArray(body) ? body : body.data
-        if (!Array.isArray(list)) {
-          throw new NezhaError('服务器列表格式异常，请确认 baseUrl 指向哪吒面板', 'json')
-        }
+        const list = await this.fetchServerPages()
         const servers = list.map((raw: any) => this.parseServer(raw))
         this.cache = { at: Date.now(), servers }
         return servers
@@ -185,9 +293,16 @@ export class NezhaApi {
     throw lastError instanceof NezhaError ? lastError : new NezhaError('获取服务器列表失败', 'network')
   }
 
+  /** 实时流推来的快照直接灌进缓存 */
+  ingestServers(list: any[]) {
+    this.cache = { at: Date.now(), servers: list.map((raw) => this.parseServer(raw)) }
+  }
+
   async fetchServices(): Promise<ServiceItem[]> {
-    const body = await this.request('/api/v1/service')
-    const data = body?.data ?? body
+    return this.parseServiceList(await this.request('/api/v1/service'))
+  }
+
+  private parseServiceList(data: any): ServiceItem[] {
     const result: ServiceItem[] = []
 
     const pushFromDict = (dict: Record<string, any>) => {
@@ -201,9 +316,9 @@ export class NezhaApi {
         const checks = totalUp + totalDown
         const currentUp = safeInt((svc as any).current_up)
         const currentDown = safeInt((svc as any).current_down)
+        // v2 的 current_* 是最近若干次探测的计数，按下线占比判定状态
         let status = -1
-        if (currentUp > 0 && currentDown === 0) status = 1
-        else if (currentDown > 0) status = 0
+        if (currentUp + currentDown > 0) status = currentDown >= currentUp ? 0 : 1
         result.push({
           id: safeInt(id),
           name: (svc as any).service_name || '未命名',
@@ -245,8 +360,7 @@ export class NezhaApi {
   }
 
   async fetchServiceDetail(id: number, period = '1d'): Promise<ServiceDetail> {
-    const body = await this.request('/api/v1/service/' + id + '/history?period=' + encodeURIComponent(period))
-    const data = body?.data ?? body
+    const data = await this.request('/api/v1/service/' + id + '/history?period=' + encodeURIComponent(period))
     const servers: ServiceServerStat[] = []
     for (const raw of Array.isArray(data?.servers) ? data.servers : []) {
       const stats = raw?.stats || {}
@@ -261,20 +375,11 @@ export class NezhaApi {
     return { name: data?.service_name || '未命名', servers }
   }
 
+  /** 历史指标；点为空时返回 reason='empty'，由上层提示 TSDB/周期 */
   async fetchMetrics(id: number, metric: string, period = '1d'): Promise<MetricPoint[]> {
     const path = '/api/v1/server/' + id + '/metrics?metric=' + encodeURIComponent(metric)
       + '&period=' + encodeURIComponent(period)
-    let body: any
-    try {
-      body = await this.request(path)
-    } catch (error) {
-      const message = String((error as Error)?.message || '')
-      if (/tsdb|timescale/i.test(message)) {
-        throw new NezhaError(message, 'tsdb')
-      }
-      throw error
-    }
-    const data = body?.data ?? body
+    const data = await this.request(path)
     const points: MetricPoint[] = []
     for (const raw of Array.isArray(data?.data_points) ? data.data_points : []) {
       const value = Number(raw?.value)

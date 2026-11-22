@@ -155,7 +155,7 @@
 <div class="container">
     <div class="header-top">
         <img class="logo" src="https://raw.githubusercontent.com/thTag/astrbot_plugin_nezhatz/c17f37c9147ca93487b2fe13e3e58960d0dcd91e/logo.png" alt="哪吒监控" />
-        <span class="title">哪吒监控</span>
+        <span class="title">{{ site_name }}</span>
     </div>
     <div class="header">
         <span class="flag-icon fi fi-{{ server.country_code }}"></span>
@@ -167,12 +167,19 @@
     </div>
 
     <div class="info-grid">
-        <div class="info-item"><span class="label">系统</span><span class="value">{{ server.platform }} {{ server.platform_version }}</span></div>
+        <div class="info-item"><span class="label">系统</span><span class="value">{{ server.platform }} {{ server.platform_version }} · {{ server.arch }}</span></div>
+        <div class="info-item"><span class="label">核心数</span><span class="value">{{ server.cpu_cores }}</span></div>
+        <div class="info-item"><span class="label">负载 1/5/15</span><span class="value">{{ server.load1 }} / {{ server.load5 }} / {{ server.load15 }}</span></div>
+        <div class="info-item"><span class="label">TCP / UDP 连接</span><span class="value">{{ server.tcp_conn }} / {{ server.udp_conn }}</span></div>
+        <div class="info-item"><span class="label">进程数</span><span class="value">{{ server.process_count }}</span></div>
+        <div class="info-item"><span class="label">Swap</span><span class="value">{{ server.swap_used }} / {{ server.swap_total }}</span></div>
+        <div class="info-item"><span class="label">速率</span><span class="value">↓ {{ server.net_in_speed }} ↑ {{ server.net_out_speed }}</span></div>
+        <div class="info-item"><span class="label">启动时间</span><span class="value">{{ server.boot_time }}</span></div>
         <div class="info-item"><span class="label">运行时间</span><span class="value">{{ server.uptime }}</span></div>
         <div class="info-item"><span class="label">入站流量</span><span class="value">{{ server.net_in }}</span></div>
         <div class="info-item"><span class="label">出站流量</span><span class="value">{{ server.net_out }}</span></div>
         <div class="info-item"><span class="label">最后活跃</span><span class="value">{{ server.last_active }}</span></div>
-        <div class="info-item"><span class="label">CPU 核心</span><span class="value">{{ server.cpu_cores|default('N/A') }}</span></div>
+
     </div>
 
     <div class="progress-section">
@@ -191,7 +198,7 @@
     </div>
 
     <div class="footer">
-        <span class="brand">⚡ 哪吒探针</span>
+        <span class="brand">⚡ {{ site_name }}</span>
         <span>·</span>
         <span>更新于 {{ update_time }}</span>
     </div>
