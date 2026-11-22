@@ -183,8 +183,8 @@ export class NezhaApi {
       const list = Array.isArray(data) ? data : data?.value ?? data?.rules ?? []
       return Array.isArray(list) ? list : []
     } catch (error) {
-      // 老版本面板没有这个路由
-      if (error instanceof NezhaError && (error.status === 404 || error.kind === 'http')) return []
+      // 只有路由不存在才当空列表；403 要透出缺 scope
+      if (error instanceof NezhaError && error.status === 404) return []
       throw error
     }
   }
