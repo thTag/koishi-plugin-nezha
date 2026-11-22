@@ -1,0 +1,64 @@
+{
+  "name": "koishi-plugin-nezha",
+  "version": "0.1.0",
+  "description": "哪吒监控（Nezha）面板查询：服务器状态、详情、服务监控与历史指标，支持卡片出图",
+  "main": "lib/index.js",
+  "typings": "lib/index.d.ts",
+  "files": [
+    "lib",
+    "templates",
+    "assets"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "pretest": "npm run build",
+    "test": "node test/local.cjs",
+    "prepack": "npm run build"
+  },
+  "keywords": [
+    "koishi",
+    "plugin",
+    "chatbot",
+    "nezha",
+    "monitor",
+    "哪吒",
+    "监控",
+    "探针"
+  ],
+  "author": "叹号大帝",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thTag/koishi-plugin-nezha.git"
+  },
+  "homepage": "https://github.com/thTag/koishi-plugin-nezha#readme",
+  "bugs": {
+    "url": "https://github.com/thTag/koishi-plugin-nezha/issues"
+  },
+  "peerDependencies": {
+    "koishi": "^4.17.0",
+    "koishi-plugin-puppeteer": "^3.9.0"
+  },
+  "peerDependenciesMeta": {
+    "koishi-plugin-puppeteer": {
+      "optional": true
+    }
+  },
+  "koishi": {
+    "description": {
+      "zh": "查询哪吒监控面板：服务器状态/详情/服务监控/历史指标，可出卡片图",
+      "en": "Query Nezha monitoring panel: server status, details, service monitors and metrics"
+    },
+    "service": {
+      "optional": [
+        "puppeteer"
+      ]
+    }
+  },
+  "devDependencies": {
+    "@koishijs/plugin-mock": "^2.6.6",
+    "@types/node": "^22.16.0",
+    "typescript": "^5.8.0"
+  }
+}
