@@ -51,6 +51,7 @@
 
 1. 可访问的面板 V2
 2. 在面板「设置 → API Tokens」建 PAT，至少给 `nezha:inventory:read`、`nezha:server:read`、`nezha:service:read`；告警列表另需 `nezha:alertrule:read`；建议填服务器 ID 白名单
+3. `apiToken` 留空是游客模式，只有面板没开 `force_auth` 时才够用
 3. `nezha 历史` 需要面板开启 TSDB（TimescaleDB）
 
 ## 安装
@@ -68,7 +69,8 @@ yarn add https://github.com/thTag/koishi-plugin-nezha
 plugins:
   nezha:
     baseUrl: https://nezha.example.com:8008   # 面板地址（必填）
-    apiToken: nzp_xxxxxxxx                    # 面板 API Token（必填）
+    apiToken: nzp_xxxxxxxx                    # 面板 API Token；留空 = 游客模式（force_auth 时不行）
+    locale: zh-CN                             # 文字输出语言：zh-CN / en-US（卡片模板固定中文）
     verifySSL: true                           # 自签证书报错时改 false
     requestTimeout: 30                        # 请求超时（秒）
     cacheTTL: 30                              # 服务器列表缓存（秒），0 = 不缓存

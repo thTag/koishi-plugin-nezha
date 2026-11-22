@@ -1,6 +1,9 @@
+import type { Locale } from './i18n'
+
 export interface Config {
   baseUrl: string
-  apiToken: string
+  apiToken?: string
+  locale: Locale
   verifySSL: boolean
   requestTimeout: number
   cacheTTL: number

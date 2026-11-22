@@ -1,0 +1,72 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 已存在的 tag（如 v1.0.0）
+        required: true
+
+permissions:
+  contents: read
+  id-token: write   # npm provenance
+  packages: write   # GitHub Packages
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: 校验 tag 与 package.json 版本一致
+        run: |
+          TAG="${{ inputs.tag || github.ref_name }}"
+          VERSION="$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "v$VERSION" ]; then
+            echo "tag $TAG 与版本 $VERSION 不一致" >&2
+            exit 1
+          fi
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: 检查该版本是否已发布
+        id: published
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          if npm view "koishi-plugin-nezha@$VERSION" version >/dev/null 2>&1; then
+            echo "已存在 $VERSION，跳过发布" >&2
+            echo "value=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 发布到 npmjs
+        if: steps.published.outputs.value != 'true'
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: 发布到 GitHub Packages
+        if: steps.published.outputs.value != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm config set //npm.pkg.github.com/:_authToken "$GH_TOKEN"
+          npm pkg set name="@${GITHUB_REPOSITORY_OWNER}/koishi-plugin-nezha"
+          npm publish --registry=https://npm.pkg.github.com --access public

@@ -14,6 +14,7 @@ const HOUR = 3600 * 1000
 let hits = { server: 0, service: 0, metrics: 0 }
 let failServerTimes = 0
 let rateLimitOnce = false
+let allowGuest = false
 
 const servers = [
   {
@@ -60,7 +61,11 @@ const server = http.createServer((req, res) => {
   }
   if (req.headers.authorization !== 'Bearer ' + TOKEN) {
     if (req.headers.authorization === 'Bearer no-scope') return fail(403, 'missing scope nezha:inventory:read')
-    return fail(401, 'unauthorized')
+    if (!req.headers.authorization && allowGuest) {
+      // 游客可读：继续走下面的路由
+    } else {
+      return fail(401, 'unauthorized')
+    }
   }
 
   if (url.pathname === '/api/v1/setting') {
@@ -147,6 +152,7 @@ function makeApp(overrides = {}) {
     renderTimeout: 5000,
     cdnBase: 'https://fastly.jsdelivr.net',
     showSiteName: true,
+    locale: 'zh-CN',
     pushTestAuthority: 0,
     userCooldown: 0,
     maxTextLength: 1800,
@@ -346,10 +352,21 @@ async function main() {
   const svcDetail = (await client.receive('nezha 服务详情 1')).join('\n')
   assert.ok(svcDetail.includes('延迟') && svcDetail.includes('ms'), '服务延迟曲线没出: ' + svcDetail)
 
-  console.log('21. 帮助')
+  console.log('21. 游客模式 / 英文')
+  allowGuest = true
+  const guest = await boot({ apiToken: '' })
+  assert.ok((await guest.receive('nezha 状态')).join('\n').includes('香港-01'), '游客模式读不到数据')
+  allowGuest = false
+  const guestDenied = (await (await boot({ apiToken: '' })).receive('nezha 状态')).join('')
+  assert.ok(guestDenied.includes('force_auth'), '游客被拒没提示 force_auth: ' + guestDenied)
+  const en = await boot({ locale: 'en-US' })
+  assert.ok((await en.receive('nezha 帮助')).join('').includes('Query a Nezha'), '英文帮助没生效')
+  assert.ok((await en.receive('nezha 历史 1 nope')).join('').includes('Unsupported metric'), '英文错误没生效')
+
+  console.log('22. 帮助')
   assert.ok((await client.receive('nezha 帮助')).join('').includes('nezha 状态'))
 
-  console.log('22. 长文本分片')
+  console.log('23. 长文本分片')
   const short = await boot({ maxTextLength: 120 })
   const parts = await short.receive('nezha 状态')
   assert.ok(parts.length > 1, '未分片')

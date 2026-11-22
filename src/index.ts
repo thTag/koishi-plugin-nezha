@@ -1,7 +1,8 @@
 import { Context, Schema, Session, h } from 'koishi'
 import { NezhaApi, NezhaError } from './api'
 import type { Config as NezhaConfig } from './types'
-import { METRIC_DISPLAY_NAMES, PERIOD_LABELS, formatBytes, formatMetricValue, percent } from './format'
+import { METRIC_DISPLAY_NAMES, PERIOD_LABELS } from './format'
+import { t, type Locale } from './i18n'
 import { Pusher } from './push'
 import {
   analyzeHistory,
@@ -24,7 +25,11 @@ export const name = 'nezha'
 export const inject = { required: ['http'], optional: ['puppeteer'] }
 export const Config: Schema<NezhaConfig> = Schema.object({
   baseUrl: Schema.string().required().description('面板地址，如 https://nezha.example.com:8008'),
-  apiToken: Schema.string().required().role('secret').description('面板 API Token（PAT，nzp_ 开头）'),
+  apiToken: Schema.string().role('secret').description('面板 API Token（nzp_ 开头）；留空即游客模式，面板开 force_auth 时必须填'),
+  locale: Schema.union([
+    Schema.const('zh-CN').description('中文'),
+    Schema.const('en-US').description('English'),
+  ] as const).default('zh-CN').description('文字输出语言；卡片模板固定中文'),
   verifySSL: Schema.boolean().default(true).description('是否校验 SSL 证书；面板用自签证书且连接报错时关掉'),
   requestTimeout: Schema.number().default(30).min(1).description('API 请求超时（秒）'),
   cacheTTL: Schema.number().default(30).min(0).description('服务器列表缓存有效期（秒），0 表示每次实时请求'),
@@ -52,22 +57,6 @@ export const Config: Schema<NezhaConfig> = Schema.object({
   debug: Schema.boolean().default(false).description('输出调试日志'),
 })
 
-const USAGE = [
-  '哪吒监控面板查询。',
-  '',
-  '· nezha 状态 —— 服务器状态概览（CPU / 内存 / 磁盘）',
-  '· nezha 概览 —— 状态 + 24h 在线率一屏看完',
-  '· nezha 详情 <ID> —— 单台服务器完整信息',
-  '· nezha 服务 —— 服务监控列表（可用率 / 延迟）',
-  '· nezha 服务详情 <ID> —— 单个服务监控的详情',
-  '· nezha 历史 <ID> <指标> [周期] —— 历史趋势，周期 1d / 7d / 30d',
-  '· nezha 在线率 <ID> [天数] —— 在线率与在线时段',
-  '· nezha 告警 —— 告警规则列表',
-  '',
-  '指标：cpu, memory, disk, load1, tcp_conn, process_count, net_in_transfer…',
-  '所有查询命令都走同一个面板。',
-].join('\n')
-
 const RULE_TYPES: Record<string, string> = {
   cpu: 'CPU', gpu: 'GPU', gpu_max: 'GPU 峰值', memory: '内存', swap: 'Swap', disk: '磁盘',
   net_in_speed: '入站速率', net_out_speed: '出站速率', net_all_speed: '总速率',
@@ -87,29 +76,30 @@ function describeRule(rule: any) {
 
 const METRIC_LIST = Object.keys(METRIC_DISPLAY_NAMES)
 const PERIOD_LIST = Object.keys(PERIOD_LABELS)
-function friendly(error: unknown) {
+function friendly(error: unknown, L: (key: any, ...args: Array<string | number>) => string, hasToken: boolean) {
   if (error instanceof NezhaError) {
     switch (error.kind) {
       case 'auth':
-        return '❌ 认证失败：' + error.message + '\n💡 Token 应以 nzp_ 开头且未过期；确认没有把 JWT 当 PAT 用'
+        return hasToken ? L('authFail', error.message) : L('authGuest')
       case 'forbidden':
-        return '❌ 权限不足：' + error.message + '\n💡 给 Token 补上 nezha:inventory:read / nezha:server:read / nezha:service:read，或把服务器加进白名单'
+        return L('forbidden', error.message)
       case 'rate':
         return '❌ ' + error.message
       case 'tsdb':
-        return '❌ TSDB 未启用：获取历史指标需要面板开启 TSDB（TimescaleDB）\n'
-          + '💡 面板配置里设 tsdb: true，装好 TimescaleDB 后重启面板'
+        return L('tsdbFail')
       case 'network':
-        return '❌ ' + error.message + '\n💡 检查 baseUrl / 端口 / 防火墙；自签证书可把 verifySSL 设为 false'
+        return L('networkFail', error.message)
       default:
         return '❌ ' + error.message
     }
   }
-  return '❌ 查询失败：' + String((error as Error)?.message || error)
+  return L('genericFail', String((error as Error)?.message || error))
 }
 
 export function apply(ctx: Context, config: NezhaConfig) {
   const api = new NezhaApi(ctx, config)
+  const locale: Locale = (config.locale as Locale) || 'zh-CN'
+  const L = (key: Parameters<typeof t>[1], ...args: Array<string | number>) => t(locale, key, ...args)
   const pusher = new Pusher(ctx, config, api)
   const streams: ServerStream[] = []
 
@@ -134,7 +124,7 @@ export function apply(ctx: Context, config: NezhaConfig) {
     const now = Date.now()
     const key = String(session.userId || (session.user as any)?.id || '')
     const last = lastCall.get(key) || 0
-    if (now - last < wait) return '⏳ 慢一点，' + Math.ceil((wait - (now - last)) / 1000) + ' 秒后再试'
+    if (now - last < wait) return L('slow', Math.ceil((wait - (now - last)) / 1000))
     lastCall.set(key, now)
     return ''
   }
@@ -183,7 +173,7 @@ export function apply(ctx: Context, config: NezhaConfig) {
   }
 
   ctx.command('nezha', '哪吒监控面板查询')
-    .usage(USAGE)
+    .usage(L('usage'))
     .example('nezha 状态')
     .action(async ({ session }: any) => {
       await handleStatus(session!)
@@ -191,7 +181,7 @@ export function apply(ctx: Context, config: NezhaConfig) {
 
   ctx.command('nezha.帮助', '哪吒插件帮助').alias('nezha.help')
     .action(async ({ session }: any) => {
-      await deliver(session!, USAGE)
+      await deliver(session!, L('usage'))
     })
 
 
@@ -211,18 +201,18 @@ export function apply(ctx: Context, config: NezhaConfig) {
       try {
         const need = Math.max(0, config.pushTestAuthority || 0)
         const authority = Number((session as any)?.authority ?? (session!.user as any)?.authority ?? 0)
-        if (authority < need) return await deliver(session!, '❌ 需要权限 ' + need + ' 及以上')
+        if (authority < need) return await deliver(session!, L('needAuthority', need))
         const count = await pusher.sendTest(channel)
-        await deliver(session!, count ? '✅ 已发送到 ' + count + ' 个频道' : '❌ 没配置 push.channels，也没给频道参数')
+        await deliver(session!, count ? L('pushSent', count) : L('pushNoChannel'))
       } catch (error) {
-        await deliver(session!, '❌ 推送测试失败：' + String((error as Error)?.message || error))
+        await deliver(session!, L('pushTestFail', String((error as Error)?.message || error)))
       }
     })
 
   ctx.command('nezha.详情 <id:number>', '单台服务器详情').alias('nezha.detail')
     .usage('nezha 详情 <服务器ID> ')
     .action(async ({ session }: any, id?: number) => {
-      if (id == null) return deliver(session!, '❌ 请指定服务器 ID，如：nezha 详情 1')
+      if (id == null) return deliver(session!, L('needServerId'))
       await handleDetail(session!, id)
     })
 
@@ -234,7 +224,7 @@ export function apply(ctx: Context, config: NezhaConfig) {
   ctx.command('nezha.服务详情 <id:number>', '单个服务监控详情').alias('nezha.service-detail')
     .usage('nezha 服务详情 <服务ID> ')
     .action(async ({ session }: any, id?: number) => {
-      if (id == null) return deliver(session!, '❌ 请指定服务 ID，如：nezha 服务详情 1')
+      if (id == null) return deliver(session!, L('needServiceId'))
       await handleServiceDetail(session!, id)
     })
 
@@ -243,10 +233,7 @@ export function apply(ctx: Context, config: NezhaConfig) {
     .usage('nezha 历史 <服务器ID> <指标> [周期] ')
     .action(async ({ session }: any, id?: number, metric?: string, period?: string) => {
       if (id == null || !metric) {
-        return deliver(session!, '📖 用法：nezha 历史 <服务器ID> <指标> [周期]\n'
-          + '指标：' + METRIC_LIST.slice(0, 8).join(', ') + ' …\n'
-          + '周期：1d（默认）/ 7d / 30d\n'
-          + '示例：nezha 历史 1 cpu 1d')
+        return deliver(session!, L('historyUsage', METRIC_LIST.slice(0, 8).join(', ')))
       }
       await handleHistory(session!, id, metric.toLowerCase(), (period || '1d').toLowerCase())
     })
@@ -254,7 +241,7 @@ export function apply(ctx: Context, config: NezhaConfig) {
   ctx.command('nezha.在线率 <id:number> [days:number]', '服务器在线率').alias('nezha.uptime')
     .usage('nezha 在线率 <服务器ID> [天数，默认 1]')
     .action(async ({ session }: any, id?: number, days?: number) => {
-      if (id == null) return deliver(session!, '❌ 请指定服务器 ID，如：nezha 在线率 1 7')
+      if (id == null) return deliver(session!, L('needServerIdRate'))
       await handleOnlineRate(session!, id, days || 1)
     })
 
@@ -265,13 +252,13 @@ export function apply(ctx: Context, config: NezhaConfig) {
 
   ctx.command('nezha.关联服务 <id:number>', '该服务器上的服务监控').alias('nezha.server-services')
     .action(async ({ session }: any, id?: number) => {
-      if (id == null) return deliver(session!, '❌ 请指定服务器 ID')
+      if (id == null) return deliver(session!, L('needServerIdShort'))
       await handleServerServices(session!, id)
     })
 
   ctx.command('nezha.服务服务器 <id:number>', '该服务监控覆盖的服务器').alias('nezha.service-servers')
     .action(async ({ session }: any, id?: number) => {
-      if (id == null) return deliver(session!, '❌ 请指定服务 ID')
+      if (id == null) return deliver(session!, L('needServiceIdShort'))
       await handleServiceServers(session!, id)
     })
   async function handleStatus(session: Session) {
@@ -282,9 +269,9 @@ export function apply(ctx: Context, config: NezhaConfig) {
       servers = await api.fetchServers()
     } catch (error) {
       logError(error)
-      return deliver(session, friendly(error))
+      return deliver(session, friendly(error, L, Boolean(config.apiToken)))
     }
-    if (!servers.length) return deliver(session, '📭 暂无服务器')
+    if (!servers.length) return deliver(session, L('emptyServers'))
     const name = await api.fetchSiteName()
     const payload = await card('status', { ...statusData(servers), site_name: name }, statusText(servers))
     await deliver(session, payload)
@@ -298,9 +285,9 @@ export function apply(ctx: Context, config: NezhaConfig) {
       servers = await api.fetchServers()
     } catch (error) {
       logError(error)
-      return deliver(session, friendly(error))
+      return deliver(session, friendly(error, L, Boolean(config.apiToken)))
     }
-    if (!servers.length) return deliver(session, '📭 暂无服务器')
+    if (!servers.length) return deliver(session, L('emptyServers'))
     const name = await api.fetchSiteName()
     await deliver(session, await card('status', { ...statusData(servers), site_name: name }, statusText(servers)))
 
@@ -312,8 +299,8 @@ export function apply(ctx: Context, config: NezhaConfig) {
         if (Number.isFinite(rate)) rates.push('· ' + server.name + ' ' + rate.toFixed(1) + '%')
       } catch {}
     }
-    if (rates.length) await deliver(session, '📈 24h 在线率：\n' + rates.join('\n'))
-    else await deliver(session, '📈 24h 在线率：暂无数据')
+    if (rates.length) await deliver(session, L('overviewRates') + '\n' + rates.join('\n'))
+    else await deliver(session, L('overviewNoRate'))
   }
 
   async function handleDetail(session: Session, id: number) {
@@ -325,9 +312,9 @@ export function apply(ctx: Context, config: NezhaConfig) {
       server = servers.find((item) => item.id === id)
     } catch (error) {
       logError(error)
-      return deliver(session, friendly(error))
+      return deliver(session, friendly(error, L, Boolean(config.apiToken)))
     }
-    if (!server) return deliver(session, '❌ 未找到 ID 为 ' + id + ' 的服务器')
+    if (!server) return deliver(session, L('notFoundServer', id))
     const name = await api.fetchSiteName()
     const payload = await card('server_detail', { ...detailData(server), site_name: name }, detailText(server))
     await deliver(session, payload)
@@ -341,9 +328,9 @@ export function apply(ctx: Context, config: NezhaConfig) {
       services = await api.fetchServices()
     } catch (error) {
       logError(error)
-      return deliver(session, friendly(error))
+      return deliver(session, friendly(error, L, Boolean(config.apiToken)))
     }
-    if (!services.length) return deliver(session, '📭 暂无服务监控')
+    if (!services.length) return deliver(session, L('emptyServices'))
     const name = await api.fetchSiteName()
     const payload = await card('service_list', { ...serviceListData(services), site_name: name }, serviceListText(services))
     await deliver(session, payload)
@@ -357,7 +344,7 @@ export function apply(ctx: Context, config: NezhaConfig) {
       detail = await api.fetchServiceDetail(id)
     } catch (error) {
       logError(error)
-      return deliver(session, friendly(error) + '\n💡 确认服务 ID 是否正确')
+      return deliver(session, friendly(error, L, Boolean(config.apiToken)) + '\n💡 确认服务 ID 是否正确')
     }
     const name = await api.fetchSiteName()
     const payload = await card('service_detail', { ...serviceDetailData(detail), site_name: name }, serviceDetailText(detail))
@@ -374,10 +361,10 @@ export function apply(ctx: Context, config: NezhaConfig) {
     const busy = throttled(session)
     if (busy) return deliver(session, busy)
     if (!METRIC_LIST.includes(metric)) {
-      return deliver(session, '❌ 不支持的指标: ' + metric + '\n💡 支持：' + METRIC_LIST.slice(0, 10).join(', ') + ' …')
+      return deliver(session, L('badMetric', metric, METRIC_LIST.slice(0, 10).join(', ')))
     }
     if (!PERIOD_LIST.includes(period)) {
-      return deliver(session, '❌ 不支持的周期: ' + period + '\n💡 支持：1d, 7d, 30d')
+      return deliver(session, L('badPeriod', period))
     }
 
     let serverName = 'ID:' + id
@@ -393,15 +380,15 @@ export function apply(ctx: Context, config: NezhaConfig) {
       points = await api.fetchMetrics(id, metric, period)
     } catch (error) {
       logError(error)
-      return deliver(session, friendly(error))
+      return deliver(session, friendly(error, L, Boolean(config.apiToken)))
     }
 
     if (!points.length) {
       const setting = await api.fetchSetting()
       const hint = setting.tsdbEnabled
-        ? '该周期内没有上报数据，换个周期试试'
-        : '面板未启用 TSDB（TimescaleDB）时接口成功但点为空'
-      return deliver(session, '📭 服务器 ' + serverName + ' 暂无 ' + metric + ' 历史数据\n💡 ' + hint)
+        ? L('hintTsdbOn')
+        : L('hintTsdbOff')
+      return deliver(session, L('emptyHistory', serverName, metric, hint))
     }
 
     const options = { serverName, metric, period, diskTotal }
@@ -418,23 +405,23 @@ export function apply(ctx: Context, config: NezhaConfig) {
     try {
       data = await api.fetchOnlineHistory(id, days)
     } catch (error) {
-      return deliver(session, friendly(error))
+      return deliver(session, friendly(error, L, Boolean(config.apiToken)))
     }
     const rate = Number(data?.online_rate)
     const total = Number(data?.total_online_seconds)
     const lines = [
-      '📈 ' + (data?.server_name || 'ID:' + id) + ' 在线率',
-      '窗口：' + (data?.days ?? days) + ' 天（上限 ' + (data?.max_days ?? '?') + ' 天）',
-      '在线率：' + (Number.isFinite(rate) ? rate.toFixed(2) + '%' : 'N/A'),
-      '在线时长：' + (Number.isFinite(total) ? (total / 3600).toFixed(2) + ' 小时' : 'N/A'),
-      '当前状态：' + (data?.currently_online ? '在线' : '离线'),
-      '最后活跃：' + (data?.last_active || '未知'),
+      L('onlineRateTitle', data?.server_name || 'ID:' + id),
+      L('onlineRateWindow', data?.days ?? days, data?.max_days ?? '?'),
+      L('onlineRateValue', Number.isFinite(rate) ? rate.toFixed(2) + '%' : 'N/A'),
+      L('onlineRateTotal', Number.isFinite(total) ? (total / 3600).toFixed(2) : 'N/A'),
+      L('onlineRateNow', data?.currently_online ? L('onlineOn') : L('onlineOff')),
+      L('onlineRateLast', data?.last_active || 'N/A'),
     ]
     const daily = Array.isArray(data?.daily) ? data.daily : []
     if (daily.length) {
-      lines.push('', '按天在线：')
+      lines.push('', L('onlineDaily'))
       for (const item of daily.slice(-14)) {
-        lines.push('· ' + item.date + ' ' + (Number(item.online_seconds) / 3600).toFixed(2) + ' 小时')
+        lines.push('· ' + item.date + ' ' + L('hours', (Number(item.online_seconds) / 3600).toFixed(2)))
       }
     }
     await deliver(session, lines.join('\n'))
@@ -447,22 +434,24 @@ export function apply(ctx: Context, config: NezhaConfig) {
     try {
       rules = await api.fetchAlertRules()
     } catch (error) {
-      return deliver(session, friendly(error))
+      return deliver(session, friendly(error, L, Boolean(config.apiToken)))
     }
     if (!rules.length) return deliver(session, '📭 暂无告警规则')
     const names = new Map<number, string>()
     try {
       for (const server of await api.fetchServers()) names.set(server.id, server.name)
     } catch {}
-    const lines = ['🚨 告警规则（' + rules.length + ' 条）']
+    const lines = [L('rulesTitle', rules.length)]
     for (const rule of rules) {
-      lines.push('· #' + rule.id + ' ' + (rule.name || '未命名') + (rule.enabled === false ? '（已停用）' : ''))
+      lines.push(L('ruleLine', rule.id, rule.name || '未命名', rule.enabled === false ? L('ruleDisabled') : ''))
       const targets = Array.isArray(rule.servers)
         ? rule.servers.map((id: any) => names.get(Number(id)) || 'ID:' + id)
         : []
-      if (targets.length) lines.push('  对象：' + targets.slice(0, 6).join('、') + (targets.length > 6 ? ' 等 ' + targets.length + ' 台' : ''))
+      if (targets.length) {
+        lines.push(L('ruleTargets', targets.slice(0, 6).join('、') + (targets.length > 6 ? L('ruleMore', targets.length) : '')))
+      }
       for (const condition of Array.isArray(rule.rules) ? rule.rules : []) {
-        lines.push('  条件：' + describeRule(condition))
+        lines.push(L('ruleCondition', describeRule(condition)))
       }
     }
     await deliver(session, lines.join('\n'))
@@ -473,10 +462,10 @@ export function apply(ctx: Context, config: NezhaConfig) {
     if (busy) return deliver(session, busy)
     try {
       const services = await api.fetchServerServices(id)
-      if (!services.length) return deliver(session, '📭 该服务器没有关联的服务监控')
+      if (!services.length) return deliver(session, L('emptyServerServices'))
       await deliver(session, serviceListText(services))
     } catch (error) {
-      return deliver(session, friendly(error))
+      return deliver(session, friendly(error, L, Boolean(config.apiToken)))
     }
   }
   async function handleServiceServers(session: Session, id: number) {
@@ -484,10 +473,10 @@ export function apply(ctx: Context, config: NezhaConfig) {
     if (busy) return deliver(session, busy)
     try {
       const servers = await api.fetchServiceServers(id)
-      if (!servers.length) return deliver(session, '📭 该服务监控没有关联服务器')
+      if (!servers.length) return deliver(session, L('emptyServiceServers'))
       await deliver(session, servers.map((server) => '· ' + server.name + ' (ID ' + server.id + ')').join('\n'))
     } catch (error) {
-      return deliver(session, friendly(error))
+      return deliver(session, friendly(error, L, Boolean(config.apiToken)))
     }
   }
 }

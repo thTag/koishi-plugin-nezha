@@ -118,7 +118,6 @@ export class NezhaApi {
 
   private async request(path: string, retryOn429 = true): Promise<any> {
     if (!this.baseUrl) throw new NezhaError('未配置面板地址（baseUrl）', 'config')
-    if (!this.config.apiToken) throw new NezhaError('未配置 API Token', 'config')
     const url = this.baseUrl + path
     this.ctx.logger.debug('GET ' + path)
     let body: any
