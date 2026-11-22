@@ -1,6 +1,6 @@
 {
   "name": "koishi-plugin-nezha",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "哪吒监控 V2 面板查询：服务器状态/详情/服务监控/在线率/告警/历史指标，支持卡片出图与定时推送",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -38,7 +38,7 @@
     "url": "https://github.com/thTag/koishi-plugin-nezha/issues"
   },
   "peerDependencies": {
-    "koishi": "^4.18.11",
+    "koishi": "^4.17.0",
     "koishi-plugin-puppeteer": "^3.9.0"
   },
   "peerDependenciesMeta": {

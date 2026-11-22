@@ -1,5 +1,8 @@
 # koishi-plugin-nezha
 
+> 🤖 **本插件由 AI 生成**：代码、文档与测试均由 AI 产出，作者负责提需求与验收。
+> 💬 欢迎加入叹号のBot小窝：**1065333145** —— <https://qm.qq.com/q/292RK9sYDK>
+
 在 Koishi 里查询[哪吒监控](https://github.com/nezhahq/nezha)（Nezha V2）面板：服务器状态、单机详情、服务监控、在线率、告警规则与历史指标，结果渲染成卡片图。
 
 > 移植自 AstrBot 插件 [astrbot_plugin_nezhatz](https://github.com/thTag/astrbot_plugin_nezhatz)，并按面板 v2.7 的 API 重写过兼容层。
