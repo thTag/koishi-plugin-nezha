@@ -52,6 +52,10 @@
     }
     .flag-icon { font-size: 36px; line-height: 1; }
     .header h1 {
+        max-width: 340px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
         font-size: 26px;
         font-weight: 700;
         color: #e9eeff;
@@ -179,15 +183,15 @@
     <div class="progress-section">
         <div class="progress-item">
             <div class="label-row"><span>CPU</span><span class="val">{{ '%.1f'|format(server.cpu) }}%</span></div>
-            <div class="progress-track"><div class="bar {% if server.cpu >= 90 %}red{% elif server.cpu >= 70 %}yellow{% else %}green{% endif %}" style="width: {{ server.cpu }}%;"></div></div>
+            <div class="progress-track"><div class="bar" style="width: {{ server.cpu }}%; background: {{ server.cpu_bar }};"></div></div>
         </div>
         <div class="progress-item">
             <div class="label-row"><span>内存</span><span class="val">{{ '%.1f'|format(server.mem_percent) }}% ({{ server.mem_used }} / {{ server.mem_total }})</span></div>
-            <div class="progress-track"><div class="bar {% if server.mem_percent >= 90 %}red{% elif server.mem_percent >= 70 %}yellow{% else %}green{% endif %}" style="width: {{ server.mem_percent }}%;"></div></div>
+            <div class="progress-track"><div class="bar" style="width: {{ server.mem_percent }}%; background: {{ server.mem_bar }};"></div></div>
         </div>
         <div class="progress-item">
             <div class="label-row"><span>磁盘</span><span class="val">{{ '%.1f'|format(server.disk_percent) }}% ({{ server.disk_used }} / {{ server.disk_total }})</span></div>
-            <div class="progress-track"><div class="bar {% if server.disk_percent >= 90 %}red{% elif server.disk_percent >= 70 %}yellow{% else %}green{% endif %}" style="width: {{ server.disk_percent }}%;"></div></div>
+            <div class="progress-track"><div class="bar" style="width: {{ server.disk_percent }}%; background: {{ server.disk_bar }};"></div></div>
         </div>
     </div>
 

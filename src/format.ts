@@ -114,6 +114,35 @@ export function formatDateTime(date = new Date()) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
 
+const BAR_GREEN = '#4ade80'
+const BAR_YELLOW = '#fbbf24'
+const BAR_RED = '#f87171'
+
+function mixHex(from: string, to: string, ratio: number) {
+  const parse = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
+  const [r1, g1, b1] = parse(from)
+  const [r2, g2, b2] = parse(to)
+  const mix = (a: number, b: number) => Math.round(a + (b - a) * ratio)
+  return '#' + [mix(r1, r2), mix(g1, g2), mix(b1, b2)].map((v) => v.toString(16).padStart(2, '0')).join('')
+}
+
+/** 官方阈值 70 / 90，交界 ±3 内互相插值 */
+export function usageColor(value: number) {
+  const percent = Math.max(0, Math.min(100, value))
+  if (percent <= 67) return BAR_GREEN
+  if (percent < 73) return mixHex(BAR_GREEN, BAR_YELLOW, (percent - 67) / 6)
+  if (percent <= 87) return BAR_YELLOW
+  if (percent < 93) return mixHex(BAR_YELLOW, BAR_RED, (percent - 87) / 6)
+  return BAR_RED
+}
+
+/** 进度条背景：交界处给 ±3 的渐变，其余纯色 */
+export function usageBar(value: number) {
+  const from = usageColor(value - 3)
+  const to = usageColor(value + 3)
+  return from === to ? from : 'linear-gradient(90deg, ' + from + ', ' + to + ')'
+}
+
 export function percent(used: number, total: number) {
   return total > 0 ? (used / total) * 100 : 0
 }

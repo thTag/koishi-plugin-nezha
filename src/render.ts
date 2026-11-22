@@ -14,6 +14,7 @@ import {
   formatUptime,
   osIcon,
   percent,
+  usageBar,
 } from './format'
 
 const TEMPLATE_DIR = join(__dirname, '..', 'templates')
@@ -94,10 +95,13 @@ export function detailData(server: ServerInfo) {
       name: server.name,
       online: server.online,
       cpu: server.cpu,
+      cpu_bar: usageBar(server.cpu),
       mem_percent: percent(server.memUsed, server.memTotal),
       mem_used: formatBytes(server.memUsed),
       mem_total: formatBytes(server.memTotal),
       disk_percent: percent(server.diskUsed, server.diskTotal),
+      mem_bar: usageBar(percent(server.memUsed, server.memTotal)),
+      disk_bar: usageBar(percent(server.diskUsed, server.diskTotal)),
       disk_used: formatBytes(server.diskUsed),
       disk_total: formatBytes(server.diskTotal),
       uptime: formatUptime(server.uptime),

@@ -87,7 +87,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         gap: 10px 16px;
         transition: opacity 0.2s;
     }
@@ -100,7 +100,8 @@
         display: flex;
         align-items: center;
         gap: 14px;
-        flex-shrink: 0;
+        min-width: 0;
+        flex-shrink: 1;
     }
     .flag-icon {
         font-size: 26px;
@@ -109,11 +110,17 @@
         text-align: center;
     }
     .server-name {
+        display: block;
+        flex: 1 1 auto;
+        min-width: 0;
         font-size: 20px;
         font-weight: 600;
         color: #f0f6ff;
         letter-spacing: -0.2px;
         white-space: nowrap;
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     .os-icon {
         font-size: 22px;
@@ -125,9 +132,10 @@
         display: flex;
         align-items: center;
         gap: 24px;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         flex: 1 1 auto;
         justify-content: center;
+        white-space: nowrap;
     }
     .resource-item {
         display: flex;
