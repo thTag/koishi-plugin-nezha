@@ -1,5 +1,15 @@
 # 变更记录
 
+## 0.2.1
+
+- 告警规则按对象解析（`type/min/max/duration`）并显示服务器名，不再是 `[object Object]`
+- 出图加 2 并发上限，超出的排队
+- 推送频道支持 `platform[:selfId]:channelId`，可用 `nezha 推送测试` 验证
+- 国旗样式探测失败时回退 emoji 国旗
+- 每用户查询冷却 `userCooldown`；401/403/429 等预期错误降为 warn
+- 新增 `nezha 概览`（状态 + 24h 在线率）、服务详情附延迟曲线
+- 删掉未使用的 `adminToken`
+
 ## 0.2.0
 
 按面板 v2.7 的 API 做兼容层，并补上上游插件的 TODO：

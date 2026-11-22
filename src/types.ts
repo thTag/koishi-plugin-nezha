@@ -1,7 +1,6 @@
 export interface Config {
   baseUrl: string
   apiToken: string
-  adminToken: string
   verifySSL: boolean
   requestTimeout: number
   cacheTTL: number
@@ -9,6 +8,8 @@ export interface Config {
   renderTimeout: number
   cdnBase: string
   showSiteName: boolean
+  pushTestAuthority: number
+  userCooldown: number
   maxTextLength: number
   debug: boolean
   push: PushConfig
@@ -102,6 +103,8 @@ export interface ServiceServerStat {
 export interface ServiceDetail {
   name: string
   servers: ServiceServerStat[]
+  /** 延迟曲线（period 1d 的 data_points） */
+  points: MetricPoint[]
 }
 
 export interface MetricPoint {

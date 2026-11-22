@@ -63,16 +63,15 @@ export class NezhaApi {
     return (this.config.baseUrl || '').trim().replace(/\/+$/, '')
   }
 
-  private headers(admin = false) {
+  private headers() {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    const token = admin ? this.config.adminToken : this.config.apiToken
-    if (token) headers.Authorization = 'Bearer ' + token
+    if (this.config.apiToken) headers.Authorization = 'Bearer ' + this.config.apiToken
     return headers
   }
 
-  private requestConfig(admin = false) {
+  private requestConfig() {
     const cfg: any = {
-      headers: this.headers(admin),
+      headers: this.headers(),
       timeout: Math.max(1, this.config.requestTimeout) * 1000,
     }
     if (!this.config.verifySSL) cfg.httpsAgent = new HttpsAgent({ rejectUnauthorized: false })
@@ -117,21 +116,19 @@ export class NezhaApi {
     return new NezhaError('请求处理失败: ' + message.trim(), 'network')
   }
 
-  private async request(path: string, admin = false, retryOn429 = true): Promise<any> {
+  private async request(path: string, retryOn429 = true): Promise<any> {
     if (!this.baseUrl) throw new NezhaError('未配置面板地址（baseUrl）', 'config')
-    if (admin && !this.config.adminToken) {
-      throw new NezhaError('管理员 Token 未配置，无法执行管理员操作', 'config')
-    }
+    if (!this.config.apiToken) throw new NezhaError('未配置 API Token', 'config')
     const url = this.baseUrl + path
     this.ctx.logger.debug('GET ' + path)
     let body: any
     try {
-      body = await this.ctx.http.get(url, this.requestConfig(admin))
+      body = await this.ctx.http.get(url, this.requestConfig())
     } catch (error) {
       const mapped = this.mapError(error)
       if (mapped.kind === 'rate' && retryOn429) {
         await sleep(1500)
-        return this.request(path, admin, false)
+        return this.request(path, false)
       }
       throw mapped
     }
@@ -362,6 +359,7 @@ export class NezhaApi {
   async fetchServiceDetail(id: number, period = '1d'): Promise<ServiceDetail> {
     const data = await this.request('/api/v1/service/' + id + '/history?period=' + encodeURIComponent(period))
     const servers: ServiceServerStat[] = []
+    const points: MetricPoint[] = []
     for (const raw of Array.isArray(data?.servers) ? data.servers : []) {
       const stats = raw?.stats || {}
       servers.push({
@@ -371,8 +369,15 @@ export class NezhaApi {
         totalUp: safeFloat(stats.total_up),
         totalDown: safeFloat(stats.total_down),
       })
+      // 多台服务器时只画第一台的曲线，避免混在一起
+      if (!points.length) {
+        for (const point of Array.isArray(stats.data_points) ? stats.data_points : []) {
+          const delay = Number(point?.delay)
+          if (Number.isFinite(delay) && delay > 0) points.push({ ts: safeInt(point?.ts), value: delay })
+        }
+      }
     }
-    return { name: data?.service_name || '未命名', servers }
+    return { name: data?.service_name || '未命名', servers, points }
   }
 
   /** 历史指标；点为空时返回 reason='empty'，由上层提示 TSDB/周期 */

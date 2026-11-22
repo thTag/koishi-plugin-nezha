@@ -22,6 +22,31 @@ const ASSET_DIR = join(__dirname, '..', 'assets')
 const LOGO_RE = /src="https:\/\/raw\.githubusercontent\.com\/[^"]*logo\.png"/g
 
 let logoCache: string | undefined
+const cdnCache = new Map<string, { at: number; ok: boolean }>()
+const CDN_TTL = 10 * 60 * 1000
+
+/** 测试用：清掉 CDN 探测缓存 */
+export function resetRenderCache() {
+  cdnCache.clear()
+}
+
+/** 国旗样式来自 CDN；拉不到就退回 emoji 国旗 */
+async function cdnAvailable(ctx: Context, config: Config) {
+  if (!config.cdnBase) return false
+  const now = Date.now()
+  const cached = cdnCache.get(config.cdnBase)
+  if (cached && now - cached.at < CDN_TTL) return cached.ok
+  const url = config.cdnBase.replace(/\/+$/, '') + '/gh/lipis/flag-icons@7.0.0/css/flag-icons.min.css'
+  let ok = false
+  try {
+    await (ctx as any).http.get(url, { timeout: 3000, responseType: 'text' })
+    ok = true
+  } catch {
+    ok = false
+  }
+  cdnCache.set(config.cdnBase, { at: now, ok })
+  return ok
+}
 
 async function logoDataUri() {
   if (logoCache !== undefined) return logoCache
@@ -34,8 +59,11 @@ async function logoDataUri() {
   return logoCache
 }
 
-export async function buildHtml(config: Config, name: string, data: Record<string, any>) {
+export async function buildHtml(ctx: Context, config: Config, name: string, data: Record<string, any>) {
   let tpl = await readFile(join(TEMPLATE_DIR, name + '.html'), 'utf8')
+  if (!(await cdnAvailable(ctx, config))) {
+    tpl = tpl.replace(/<span class="flag-icon fi fi-\{\{ server\.country_code \}\}"><\/span>/g, '<span class="flag-icon">{{ server.flag }}</span>')
+  }
   const cdn = (config.cdnBase || '').replace(/\/+$/, '')
   if (cdn && cdn !== 'https://fastly.jsdelivr.net') {
     tpl = tpl.split('https://fastly.jsdelivr.net').join(cdn)
@@ -51,7 +79,7 @@ export async function renderCard(
   name: string,
   data: Record<string, any>,
 ): Promise<Buffer> {
-  const html = await buildHtml(config, name, data)
+  const html = await buildHtml(ctx, config, name, data)
   const page = await (ctx as any).puppeteer.page()
   try {
     if (typeof (page as any).setViewport === 'function') {
@@ -84,6 +112,7 @@ export function statusData(servers: ServerInfo[]) {
       disk_percent: percent(s.diskUsed, s.diskTotal),
       os_icon: osIcon(s.platform),
       country_code: (s.geoipCountry || 'un').toLowerCase(),
+      flag: countryFlag(s.geoipCountry),
     })),
     update_time: formatDateTime(),
   }
@@ -113,6 +142,7 @@ export function detailData(server: ServerInfo) {
       net_out_speed: formatBytes(server.netOutSpeed) + '/s',
       last_active: formatLastActive(server.lastActive),
       country_code: (server.geoipCountry || 'un').toLowerCase(),
+      flag: countryFlag(server.geoipCountry),
       arch: server.arch || 'N/A',
       cpu_cores: server.cpuCores || 'N/A',
       boot_time: server.bootTime ? formatDateTime(new Date(server.bootTime * 1000)) : 'N/A',

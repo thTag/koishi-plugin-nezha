@@ -37,6 +37,7 @@ export const METRIC_DISPLAY_NAMES: Record<string, string> = {
   temperature: '温度',
   uptime: '运行时间',
   gpu: 'GPU 使用率',
+  delay: '延迟',
 }
 
 export const METRIC_UNITS: Record<string, string> = {
@@ -44,7 +45,7 @@ export const METRIC_UNITS: Record<string, string> = {
   net_in_speed: 'bps', net_out_speed: 'bps',
   load1: '', load5: '', load15: '',
   tcp_conn: '个', udp_conn: '个', process_count: '个',
-  temperature: '°C', uptime: '秒', gpu: '%',
+  temperature: '°C', uptime: '秒', gpu: '%', delay: 'ms',
 }
 
 export const PERIOD_LABELS: Record<string, string> = {
@@ -94,6 +95,7 @@ export function formatUptime(seconds: number) {
 }
 
 export function formatMetricValue(value: number, metric: string) {
+  if (metric === 'delay') return value.toFixed(1) + 'ms'
   if (metric === 'disk') return `${value.toFixed(1)}%`
   if (metric === 'net_in_transfer' || metric === 'net_out_transfer') return formatBytes(Math.trunc(value))
   if (metric === 'uptime') return formatUptime(Math.trunc(value))

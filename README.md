@@ -18,6 +18,7 @@
 | 命令 | 说明 |
 |---|---|
 | `nezha 状态` | 服务器状态概览（CPU / 内存 / 磁盘），在线与离线分开统计 |
+| `nezha 概览` | 状态卡 + 前几台的 24h 在线率，一屏看完 |
 | `nezha 详情 <ID>` | 单机完整信息：系统、架构、核心数、负载、连接、进程、Swap、速率、流量、运行时间 |
 | `nezha 服务` | 服务监控列表（可用率 / 延迟 / 当前状态） |
 | `nezha 服务详情 <ID>` | 单个服务监控的明细 |
@@ -26,6 +27,7 @@
 | `nezha 告警` | 面板里的告警规则列表 |
 | `nezha 关联服务 <ID>` | 这台服务器上的服务监控 |
 | `nezha 服务服务器 <ID>` | 该服务监控覆盖的服务器 |
+| `nezha 推送测试 [频道]` | 往推送频道发一条测试消息 |
 | `nezha 帮助` | 用法 |
 
 英文别名：`status` / `detail` / `service` / `service-detail` / `history` / `uptime` / `alert` / `server-services` / `service-servers`。
@@ -39,6 +41,7 @@
 - CPU / 内存 / 磁盘阈值（`thresholdCpu` / `thresholdMem` / `thresholdDisk`，0 关闭）
 - 离线告警（`push.offline`），恢复时补一条
 - 同一告警有 `push.cooldown` 分钟冷却，避免刷屏
+- 频道格式 `platform[:selfId]:channelId`；配好多半是错的，先 `nezha 推送测试` 验一条（默认要权限 3，`pushTestAuthority` 可调）
 
 ### 实时状态流
 
@@ -85,6 +88,8 @@ plugins:
     renderTimeout: 30000
     cdnBase: https://fastly.jsdelivr.net      # 国旗/系统图标 CDN，可换镜像
     showSiteName: true                        # 标题用面板站点名
+    pushTestAuthority: 3                      # 推送测试所需权限
+    userCooldown: 3                           # 同一用户查询冷却（秒）
     maxTextLength: 1800
     debug: false
 ```
@@ -94,7 +99,8 @@ plugins:
 5 个页面各有一套 HTML 模板（`templates/`），走 puppeteer 截图；国旗、系统图标由 `flag-icons` / `font-logos` 两个 CDN 样式提供：
 
 - 没装 puppeteer、浏览器起不来、截图超时——记一条 warn 后改发文字，不会卡住命令
-- Bot 服务器出不了网时国旗和系统图标会缺，其余布局正常；`cdnBase` 可指到自己的镜像
+- 国旗样式探测失败（内网/断外网）时自动退回 emoji 国旗；系统图标仍会缺，`cdnBase` 可指到自己的镜像
+- 进度条按官方 70 / 90 阈值：绿→黄→红，交界 ±3 内做渐变
 - logo 已内联进包（`assets/logo.png`），不依赖 GitHub
 
 ## 安全提醒

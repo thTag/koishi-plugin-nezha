@@ -91,13 +91,25 @@ export class Pusher {
     }
   }
 
+  /** 测试推一条；不传频道就发给配置里的全部频道，返回实际发送数 */
+  async sendTest(channel?: string) {
+    const channels = (channel ? [channel] : this.config.push.channels || []).filter(Boolean)
+    if (!channels.length) return 0
+    await this.send(channels, '🔔 nezha 推送测试 · ' + formatDateTime())
+    return channels.length
+  }
+
   private async send(channels: string[], content: string) {
     for (const channel of channels) {
-      const [platform, ...rest] = channel.split(':')
-      const id = rest.join(':')
-      const bot = this.ctx.bots.find((item) => item.platform === platform)
+      const parts = channel.split(':')
+      const platform = parts[0]
+      const selfId = parts.length >= 3 ? parts[1] : ''
+      const id = parts.slice(selfId ? 2 : 1).join(':')
+      const bot = (selfId
+        ? this.ctx.bots.find((item) => item.platform === platform && item.selfId === selfId)
+        : undefined) || this.ctx.bots.find((item) => item.platform === platform)
       if (!bot || !id) {
-        this.ctx.logger.warn('推送频道 %s 没有可用 bot（格式 platform:channelId）', channel)
+        this.ctx.logger.warn('推送频道 %s 没有可用 bot（格式 platform[:selfId]:channelId）', channel)
         continue
       }
       try {

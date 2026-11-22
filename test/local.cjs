@@ -93,11 +93,22 @@ const server = http.createServer((req, res) => {
     return ok({
       service_id: 1,
       service_name: '站点A',
-      servers: [{ server_id: 1, server_name: '香港-01', stats: { total_up: 100, total_down: 2, avg_delay: 14.2, up_percent: 98.0 } }],
+      servers: [{
+        server_id: 1,
+        server_name: '香港-01',
+        stats: {
+          total_up: 100, total_down: 2, avg_delay: 14.2, up_percent: 98.0,
+          data_points: [
+            { ts: Date.now() - 3 * HOUR, delay: 12.5, status: 1 },
+            { ts: Date.now() - 2 * HOUR, delay: 18.2, status: 1 },
+            { ts: Date.now() - HOUR, delay: 14.4, status: 1 },
+          ],
+        },
+      }],
     })
   }
   if (url.pathname === '/api/v1/alert-rule') {
-    return ok([{ id: 3, name: 'CPU 过高', enabled: true, servers: ['1'], rules: ['cpu > 90'] }])
+    return ok([{ id: 3, name: 'CPU 过高', enabled: true, servers: [1], rules: [{ type: 'cpu', min: 80, duration: 60 }] }])
   }
   if (url.pathname === '/api/v1/server/1/online-history') {
     return ok({ server_id: 1, server_name: '香港-01', days: 1, max_days: 7, online_rate: 99.5, total_online_seconds: 86040, currently_online: true, daily: [{ date: '2026-11-22', online_seconds: 86040 }] })
@@ -136,6 +147,8 @@ function makeApp(overrides = {}) {
     renderTimeout: 5000,
     cdnBase: 'https://fastly.jsdelivr.net',
     showSiteName: true,
+    pushTestAuthority: 0,
+    userCooldown: 0,
     maxTextLength: 1800,
     debug: false,
     push: { enabled: false, interval: 30, channels: [], thresholdCpu: 90, thresholdMem: 90, thresholdDisk: 90, offline: true, cooldown: 30 },
@@ -280,18 +293,21 @@ async function main() {
 
   console.log('17. 模板渲染')
   const config = { cdnBase: 'https://fastly.jsdelivr.net', enableImage: false, maxTextLength: 1800 }
-  const html = await render.buildHtml(config, 'status', render.statusData(servers.map(pluginServer)))
+  render.resetRenderCache()
+  const renderCtx = { http: { get: async () => { throw new Error('offline') } }, logger: { debug() {}, warn() {}, error() {} } }
+  const html = await render.buildHtml(renderCtx, config, 'status', render.statusData(servers.map(pluginServer)))
   assert.ok(html.includes('香港-01'), '模板没渲染出服务器名')
   assert.ok(!/\{\{|\{%/.test(html), '模板标签没被替换完')
   assert.ok(html.includes('哪吒监控'), '站点名默认值缺失')
-  assert.ok(html.includes('fi-hk') && html.includes('fl-ubuntu'), '国旗/系统图标缺失')
-  const detailHtml = await render.buildHtml(config, 'server_detail', render.detailData({ ...pluginServer(servers[0]), cpuCores: 1, load1: 0.42, load5: 0.21, load15: 0.11, tcpConn: 28, udpConn: 7, processCount: 134, arch: 'x86_64', bootTime: 1786127253, netInSpeed: 2048, netOutSpeed: 1024, swapUsed: 0, swapTotal: 536866816 }))
+  assert.ok(html.includes('🇭🇰'), 'CDN 不可用时没回退 emoji 国旗')
+  assert.ok(html.includes('fl-ubuntu'), '系统图标缺失')
+  const detailHtml = await render.buildHtml(renderCtx, config, 'server_detail', render.detailData({ ...pluginServer(servers[0]), cpuCores: 1, load1: 0.42, load5: 0.21, load15: 0.11, tcpConn: 28, udpConn: 7, processCount: 134, arch: 'x86_64', bootTime: 1786127253, netInSpeed: 2048, netOutSpeed: 1024, swapUsed: 0, swapTotal: 536866816 }))
   assert.ok(detailHtml.includes('0.42 / 0.21 / 0.11'), '负载没进模板')
   assert.ok(detailHtml.includes('data:image/png;base64,'), 'logo 没内联')
 
   console.log('18. 告警 / 在线率 / 关联查询')
   const alertText = (await client.receive('nezha 告警')).join('')
-  assert.ok(alertText.includes('CPU 过高') && alertText.includes('cpu > 90'), '告警规则缺失: ' + alertText)
+  assert.ok(alertText.includes('CPU 过高') && alertText.includes('CPU ≥ 80'), '告警规则缺失: ' + alertText)
   const rateText = (await client.receive('nezha 在线率 1')).join('')
   assert.ok(rateText.includes('99.50%') && rateText.includes('小时'), '在线率缺失: ' + rateText)
   const ssText = (await client.receive('nezha 关联服务 1')).join('')
@@ -299,10 +315,41 @@ async function main() {
   const vsText = (await client.receive('nezha 服务服务器 1')).join('')
   assert.ok(vsText.includes('香港-01'), '服务关联服务器缺失')
 
-  console.log('19. 帮助')
+  console.log('19. 告警对象渲染 / 限流 / 推送测试')
+  const ruleText = (await client.receive('nezha 告警')).join('')
+  assert.ok(ruleText.includes('CPU ≥ 80') && ruleText.includes('持续 60s'), '告警条件没解析: ' + ruleText)
+  assert.ok(ruleText.includes('香港-01'), '告警对象没换成名字: ' + ruleText)
+
+  const slow = await boot({ userCooldown: 2 })
+  await slow.receive('nezha 状态')
+  assert.ok((await slow.receive('nezha 状态')).join('').includes('慢一点'), '限流没生效')
+
+  const pushApp = makeApp({ push: { enabled: false, interval: 30, channels: ['mock:20001'], thresholdCpu: 90, thresholdMem: 90, thresholdDisk: 90, offline: true, cooldown: 30 } })
+  await pushApp.app.start()
+  pushApp.app.plugin(plugin, pushApp.config)
+  await pushApp.app.start()
+  const sent = []
+  pushApp.app.bots[0].sendMessage = async (channel, content) => { sent.push([channel, content]); return content }
+  const pushClient = pushApp.app.mock.client('10001')
+  await pushClient.receive('nezha 推送测试')
+  assert.ok(
+    sent.some(([channel, content]) => channel === '20001' && JSON.stringify(content).includes('推送测试')),
+    '推送测试没发: ' + JSON.stringify(sent),
+  )
+  sent.length = 0
+  await pushClient.receive('nezha 推送测试 mock:999:123')
+  assert.ok(sent.some(([channel]) => channel === '123'), '指定频道没生效: ' + JSON.stringify(sent))
+
+  console.log('20. 概览 / 服务延迟曲线')
+  const overview = (await client.receive('nezha 概览')).join('\n')
+  assert.ok(overview.includes('香港-01') && overview.includes('24h 在线率'), '概览不完整: ' + overview)
+  const svcDetail = (await client.receive('nezha 服务详情 1')).join('\n')
+  assert.ok(svcDetail.includes('延迟') && svcDetail.includes('ms'), '服务延迟曲线没出: ' + svcDetail)
+
+  console.log('21. 帮助')
   assert.ok((await client.receive('nezha 帮助')).join('').includes('nezha 状态'))
 
-  console.log('20. 长文本分片')
+  console.log('22. 长文本分片')
   const short = await boot({ maxTextLength: 120 })
   const parts = await short.receive('nezha 状态')
   assert.ok(parts.length > 1, '未分片')
