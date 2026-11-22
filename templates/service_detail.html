@@ -45,6 +45,10 @@
         -webkit-text-fill-color: transparent;
         background-clip: text;
     }
+    .header h1 .emoji {
+        -webkit-text-fill-color: #ffffff;
+        color: #ffffff;
+    }
     .header {
         display: flex;
         justify-content: space-between;
@@ -135,7 +139,7 @@
         <span class="title">哪吒监控</span>
     </div>
     <div class="header">
-        <h1>📋 {{ service_name }}</h1>
+        <h1><span class="emoji">📋</span> {{ service_name }}</h1>
         <span class="status-badge {{ overall_status_class }}">
             <span class="status-dot {{ overall_status_class }}"></span>
             {{ overall_status_text }}

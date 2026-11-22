@@ -45,6 +45,10 @@
         -webkit-text-fill-color: transparent;
         background-clip: text;
     }
+    .header h1 .emoji {
+        -webkit-text-fill-color: #ffffff;
+        color: #ffffff;
+    }
     .header {
         display: flex;
         justify-content: space-between;
@@ -158,7 +162,7 @@
         <span class="title">哪吒监控</span>
     </div>
     <div class="header">
-        <h1>📊 服务监控</h1>
+        <h1><span class="emoji">📊</span> 服务监控</h1>
         <div class="stats">
             <span class="stat-item">总计 <span class="num">{{ total }}</span></span>
             <span class="stat-item">🟢 在线 <span class="num">{{ online }}</span></span>

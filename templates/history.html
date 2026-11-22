@@ -45,6 +45,10 @@
         -webkit-text-fill-color: transparent;
         background-clip: text;
     }
+    .header h1 .emoji {
+        -webkit-text-fill-color: #ffffff;
+        color: #ffffff;
+    }
     .header {
         display: flex;
         justify-content: space-between;
@@ -131,7 +135,7 @@
         <span class="title">哪吒监控</span>
     </div>
     <div class="header">
-        <h1>📈 {{ server_name }} - {{ metric_name }}</h1>
+        <h1><span class="emoji">📈</span> {{ server_name }} - {{ metric_name }}</h1>
         <span class="period-badge">{{ period_label }}</span>
     </div>
 
