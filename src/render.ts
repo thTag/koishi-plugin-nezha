@@ -239,12 +239,31 @@ export function analyzeHistory(rawPoints: { ts: number; value: number }[], optio
 
   let points = ''
   if (clipped.length > 1) {
-    const lo = Math.min(...clipped)
-    const hi = Math.max(...clipped)
+    // 点太多时按桶取均值再画，避免 30 秒粒度在 600px 里挤成竖条
+    const MAX_POINTS = 360
+    const plot = clipped.length > MAX_POINTS
+      ? Array.from({ length: MAX_POINTS }, (_, bucket) => {
+        const from = Math.floor((bucket * clipped.length) / MAX_POINTS)
+        const to = Math.max(from + 1, Math.floor(((bucket + 1) * clipped.length) / MAX_POINTS))
+        let sum = 0
+        for (let i = from; i < to; i++) sum += clipped[i]
+        return sum / (to - from)
+      })
+      : clipped
+    // 再做一次滑动平均，去掉探测抖动
+    const smooth = plot.map((_, i) => {
+      const from = Math.max(0, i - 3)
+      const to = Math.min(plot.length, i + 4)
+      let sum = 0
+      for (let j = from; j < to; j++) sum += plot[j]
+      return sum / (to - from)
+    })
+    const lo = Math.min(...smooth)
+    const hi = Math.max(...smooth)
     const range = hi !== lo ? hi - lo : 1
-    points = clipped
+    points = smooth
       .map((v, i) => {
-        const x = (i / Math.max(clipped.length - 1, 1)) * 600
+        const x = (i / Math.max(smooth.length - 1, 1)) * 600
         const y = 140 - ((v - lo) / range) * 120 - 10
         return x.toFixed(1) + ',' + y.toFixed(1)
       })
