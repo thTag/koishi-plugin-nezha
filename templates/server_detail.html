@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>服务器详情 - {{ server.name }}</title>
-<link rel="stylesheet" href="https://fastly.jsdelivr.net/gh/lipis/flag-icons@7.0.0/css/flag-icons.min.css">
 <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
@@ -50,7 +49,7 @@
         margin-bottom: 24px;
         flex-wrap: wrap;
     }
-    .flag-icon { font-size: 36px; line-height: 1; }
+    .flag-icon { width: 44px; height: 33px; object-fit: cover; border-radius: 3px; background: #2a3140; }
     .header h1 {
         max-width: 340px;
         overflow: hidden;
@@ -156,7 +155,7 @@
         <span class="title">{{ site_name }}</span>
     </div>
     <div class="header">
-        <span class="flag-icon fi fi-{{ server.country_code }}"></span>
+        <img class="flag-icon" src="{{ server.flag_src }}" alt="{{ server.country_code }}" />
         <h1>{{ server.name }}</h1>
         <span class="status-badge {{ 'online' if server.online else 'offline' }}">
             <span class="status-dot {{ 'online' if server.online else 'offline' }}"></span>

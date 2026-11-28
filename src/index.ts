@@ -51,7 +51,6 @@ export const Config: Schema<NezhaConfig> = Schema.object({
   userCooldown: Schema.number().default(3).min(0).description('同一用户连续查询的最小间隔（秒），0 关闭'),
   enableImage: Schema.boolean().default(true).description('把结果渲染成卡片图（需要 koishi-plugin-puppeteer）'),
   renderTimeout: Schema.number().default(30000).min(1000).description('出图超时（毫秒）'),
-  cdnBase: Schema.string().default('https://fastly.jsdelivr.net').description('模板里 flag-icons / font-logos 的 CDN 前缀，可换成自己的镜像'),
   showSiteName: Schema.boolean().default(true).description('卡片标题用面板设置的站点名，关掉则显示「哪吒监控」'),
   maxTextLength: Schema.number().default(1800).min(50).description('单条文字消息最大字符数'),
   debug: Schema.boolean().default(false).description('输出调试日志'),

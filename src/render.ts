@@ -7,6 +7,7 @@ import {
   METRIC_DISPLAY_NAMES,
   PERIOD_LABELS,
   countryFlag,
+  flagSrc,
   formatBytes,
   formatDateTime,
   formatMetricValue,
@@ -14,38 +15,39 @@ import {
   formatUptime,
   osIcon,
   percent,
+  resetFlagCache,
   usageBar,
 } from './format'
 
 const TEMPLATE_DIR = join(__dirname, '..', 'templates')
 const ASSET_DIR = join(__dirname, '..', 'assets')
 const LOGO_RE = /src="https:\/\/raw\.githubusercontent\.com\/[^"]*logo\.png"/g
+const FONT_CSS_RE = /<link rel="stylesheet" href="https:\/\/fastly\.jsdelivr\.net\/npm\/font-logos@1\/assets\/font-logos\.css">/g
 
 let logoCache: string | undefined
-const cdnCache = new Map<string, { at: number; ok: boolean }>()
-const CDN_TTL = 10 * 60 * 1000
+let fontCache: string | undefined
 
-/** 测试用：清掉 CDN 探测缓存 */
+/** 测试用：清掉本地资源缓存 */
 export function resetRenderCache() {
-  cdnCache.clear()
+  logoCache = undefined
+  fontCache = undefined
+  resetFlagCache()
 }
 
-/** 国旗样式来自 CDN；拉不到就退回 emoji 国旗 */
-async function cdnAvailable(ctx: Context, config: Config) {
-  if (!config.cdnBase) return false
-  const now = Date.now()
-  const cached = cdnCache.get(config.cdnBase)
-  if (cached && now - cached.at < CDN_TTL) return cached.ok
-  const url = config.cdnBase.replace(/\/+$/, '') + '/gh/lipis/flag-icons@7.0.0/css/flag-icons.min.css'
-  let ok = false
+/** 系统图标字体内置进 HTML：字体文件转 data URI，断网也有图标 */
+async function fontStyle() {
+  if (fontCache !== undefined) return fontCache
   try {
-    await (ctx as any).http.get(url, { timeout: 3000, responseType: 'text' })
-    ok = true
+    const [css, woff2] = await Promise.all([
+      readFile(join(ASSET_DIR, 'font-logos.css'), 'utf8'),
+      readFile(join(ASSET_DIR, 'font-logos.woff2')),
+    ])
+    const uri = 'data:font/woff2;base64,' + woff2.toString('base64')
+    fontCache = '<style>' + css.replace(/src:url\("[^"]*"\) format\("woff"\),url\("[^"]*"\) format\("woff2"\),url\("[^"]*"\) format\("truetype"\)/, 'src:url("' + uri + '") format("woff2")') + '</style>'
   } catch {
-    ok = false
+    fontCache = ''
   }
-  cdnCache.set(config.cdnBase, { at: now, ok })
-  return ok
+  return fontCache
 }
 
 async function logoDataUri() {
@@ -61,13 +63,8 @@ async function logoDataUri() {
 
 export async function buildHtml(ctx: Context, config: Config, name: string, data: Record<string, any>) {
   let tpl = await readFile(join(TEMPLATE_DIR, name + '.html'), 'utf8')
-  if (!(await cdnAvailable(ctx, config))) {
-    tpl = tpl.replace(/<span class="flag-icon fi fi-\{\{ server\.country_code \}\}"><\/span>/g, '<span class="flag-icon">{{ server.flag }}</span>')
-  }
-  const cdn = (config.cdnBase || '').replace(/\/+$/, '')
-  if (cdn && cdn !== 'https://fastly.jsdelivr.net') {
-    tpl = tpl.split('https://fastly.jsdelivr.net').join(cdn)
-  }
+  const font = await fontStyle()
+  if (font) tpl = tpl.replace(FONT_CSS_RE, font)
   const logo = await logoDataUri()
   if (logo) tpl = tpl.replace(LOGO_RE, 'src="' + logo + '"')
   return renderTemplate(tpl, { site_name: '哪吒监控', ...data })
@@ -113,6 +110,7 @@ export function statusData(servers: ServerInfo[]) {
       os_icon: osIcon(s.platform),
       country_code: (s.geoipCountry || 'un').toLowerCase(),
       flag: countryFlag(s.geoipCountry),
+      flag_src: flagSrc(s.geoipCountry),
     })),
     update_time: formatDateTime(),
   }
@@ -143,6 +141,7 @@ export function detailData(server: ServerInfo) {
       last_active: formatLastActive(server.lastActive),
       country_code: (server.geoipCountry || 'un').toLowerCase(),
       flag: countryFlag(server.geoipCountry),
+      flag_src: flagSrc(server.geoipCountry),
       arch: server.arch || 'N/A',
       cpu_cores: server.cpuCores || 'N/A',
       boot_time: server.bootTime ? formatDateTime(new Date(server.bootTime * 1000)) : 'N/A',

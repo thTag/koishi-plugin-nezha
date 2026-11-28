@@ -150,7 +150,6 @@ function makeApp(overrides = {}) {
     cacheTTL: 0,
     enableImage: false,
     renderTimeout: 5000,
-    cdnBase: 'https://fastly.jsdelivr.net',
     showSiteName: true,
     locale: 'zh-CN',
     pushTestAuthority: 0,
@@ -298,15 +297,19 @@ async function main() {
   assert.ok(pagedText.includes('东京-02') || pagedText.includes('香港-01'), '分页列表为空')
 
   console.log('17. 模板渲染')
-  const config = { cdnBase: 'https://fastly.jsdelivr.net', enableImage: false, maxTextLength: 1800 }
+  const config = { enableImage: false, maxTextLength: 1800 }
   render.resetRenderCache()
   const renderCtx = { http: { get: async () => { throw new Error('offline') } }, logger: { debug() {}, warn() {}, error() {} } }
   const html = await render.buildHtml(renderCtx, config, 'status', render.statusData(servers.map(pluginServer)))
   assert.ok(html.includes('香港-01'), '模板没渲染出服务器名')
   assert.ok(!/\{\{|\{%/.test(html), '模板标签没被替换完')
   assert.ok(html.includes('哪吒监控'), '站点名默认值缺失')
-  assert.ok(html.includes('🇭🇰'), 'CDN 不可用时没回退 emoji 国旗')
+  assert.ok(html.includes('data:image/svg+xml;base64,'), '国旗没内联成 data URI')
   assert.ok(html.includes('fl-ubuntu'), '系统图标缺失')
+  assert.ok(html.includes('data:font/woff2;base64,'), '图标字体没内联')
+  assert.ok(!/<link rel="stylesheet"/.test(html), '还在依赖外部样式表')
+  assert.ok(!html.includes('🖥️'), '总计还带 emoji')
+  assert.ok(html.includes('<span class="online-dot"></span>'), '在线圆点没改成 CSS 圆点')
   const detailHtml = await render.buildHtml(renderCtx, config, 'server_detail', render.detailData({ ...pluginServer(servers[0]), cpuCores: 1, load1: 0.42, load5: 0.21, load15: 0.11, tcpConn: 28, udpConn: 7, processCount: 134, arch: 'x86_64', bootTime: 1786127253, netInSpeed: 2048, netOutSpeed: 1024, swapUsed: 0, swapTotal: 536866816 }))
   assert.ok(detailHtml.includes('0.42 / 0.21 / 0.11'), '负载没进模板')
   assert.ok(detailHtml.includes('data:image/png;base64,'), 'logo 没内联')

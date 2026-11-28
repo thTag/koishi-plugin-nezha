@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{{ site_name }}</title>
-<link rel="stylesheet" href="https://fastly.jsdelivr.net/gh/lipis/flag-icons@7.0.0/css/flag-icons.min.css">
 <link rel="stylesheet" href="https://fastly.jsdelivr.net/npm/font-logos@1/assets/font-logos.css">
 <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -70,8 +69,16 @@
         color: #b0c4e0;
     }
     .stat-item .num { font-weight: 700; color: #f0f4ff; margin-left: 4px; }
-    .stat-item .online-dot { color: #4ade80; }
-    .stat-item .offline-dot { color: #f87171; }
+    .stat-item .online-dot,
+    .stat-item .offline-dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        vertical-align: middle;
+    }
+    .stat-item .online-dot { background: #4ade80; }
+    .stat-item .offline-dot { background: #f87171; }
 
     .server-grid {
         display: flex;
@@ -104,10 +111,12 @@
         flex-shrink: 1;
     }
     .flag-icon {
-        font-size: 26px;
-        line-height: 1;
         width: 32px;
-        text-align: center;
+        height: 24px;
+        flex-shrink: 0;
+        object-fit: cover;
+        border-radius: 3px;
+        background: #2a3140;
     }
     .server-name {
         display: block;
@@ -228,9 +237,9 @@
             <h1>{{ site_name }}</h1>
         </div>
         <div class="stats">
-            <span class="stat-item">🖥️ 总计 <span class="num">{{ total }}</span></span>
-            <span class="stat-item"><span class="online-dot">●</span> 在线 <span class="num">{{ online }}</span></span>
-            <span class="stat-item"><span class="offline-dot">●</span> 离线 <span class="num">{{ offline }}</span></span>
+            <span class="stat-item">总计 <span class="num">{{ total }}</span></span>
+            <span class="stat-item"><span class="online-dot"></span> 在线 <span class="num">{{ online }}</span></span>
+            <span class="stat-item"><span class="offline-dot"></span> 离线 <span class="num">{{ offline }}</span></span>
         </div>
     </div>
 
@@ -238,7 +247,7 @@
         {% for server in servers %}
         <div class="server-card {% if not server.online %}offline{% endif %}">
             <div class="server-info">
-                <span class="flag-icon fi fi-{{ server.country_code }}"></span>
+                <img class="flag-icon" src="{{ server.flag_src }}" alt="{{ server.country_code }}" />
                 <span class="server-name">{{ server.name }}</span>
                 {% if server.os_icon %}
                 <span class="os-icon {{ server.os_icon }}"></span>

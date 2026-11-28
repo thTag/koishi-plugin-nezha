@@ -91,7 +91,6 @@ plugins:
       cooldown: 30
     enableImage: true                         # 出卡片图，需 puppeteer
     renderTimeout: 30000
-    cdnBase: https://fastly.jsdelivr.net      # 国旗/系统图标 CDN，可换镜像
     showSiteName: true                        # 标题用面板站点名
     pushTestAuthority: 3                      # 推送测试所需权限
     userCooldown: 3                           # 同一用户查询冷却（秒）
@@ -101,12 +100,12 @@ plugins:
 
 ## 出图与降级
 
-5 个页面各有一套 HTML 模板（`templates/`），走 puppeteer 截图；国旗、系统图标由 `flag-icons` / `font-logos` 两个 CDN 样式提供：
+5 个页面各有一套 HTML 模板（`templates/`），走 puppeteer 截图：
 
 - 没装 puppeteer、浏览器起不来、截图超时——记一条 warn 后改发文字，不会卡住命令
-- 国旗样式探测失败（内网/断外网）时自动退回 emoji 国旗；系统图标仍会缺，`cdnBase` 可指到自己的镜像
+- 国旗（`assets/flags/*.svg`）、系统图标字体（`assets/font-logos.woff2`）、logo 全部内联进包并转成 data URI，**断外网也不缺图**，无需任何 CDN
+- 取不到国家代码时用联合国旗兜底
 - 进度条按官方 70 / 90 阈值：绿→黄→红，交界 ±3 内做渐变
-- logo 已内联进包（`assets/logo.png`），不依赖 GitHub
 
 ## 安全提醒
 

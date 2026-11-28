@@ -9,7 +9,6 @@ export interface Config {
   cacheTTL: number
   enableImage: boolean
   renderTimeout: number
-  cdnBase: string
   showSiteName: boolean
   pushTestAuthority: number
   userCooldown: number

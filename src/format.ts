@@ -1,16 +1,10 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 const BYTES_PER_UNIT = 1024
 
-const COUNTRY_FLAGS: Record<string, string> = {
-  cn: '🇨🇳', us: '🇺🇸', hk: '🇭🇰', jp: '🇯🇵', kr: '🇰🇷',
-  sg: '🇸🇬', uk: '🇬🇧', de: '🇩🇪', fr: '🇫🇷', ru: '🇷🇺',
-  au: '🇦🇺', ca: '🇨🇦', in: '🇮🇳', br: '🇧🇷', mx: '🇲🇽',
-  it: '🇮🇹', es: '🇪🇸', nl: '🇳🇱', se: '🇸🇪', no: '🇳🇴',
-  fi: '🇫🇮', is: '🇮🇸', pl: '🇵🇱', ua: '🇺🇦', tr: '🇹🇷',
-  ae: '🇦🇪', sa: '🇸🇦', il: '🇮🇱', za: '🇿🇦', eg: '🇪🇬',
-  ng: '🇳🇬', ke: '🇰🇪', tw: '🇹🇼', mo: '🇲🇴', my: '🇲🇾',
-  th: '🇹🇭', vn: '🇻🇳', ph: '🇵🇭', id: '🇮🇩', pk: '🇵🇰',
-  bd: '🇧🇩', kz: '🇰🇿', uz: '🇺🇿',
-}
+const FLAG_DIR = join(__dirname, '..', 'assets', 'flags')
+const UNKNOWN_FLAG = 'un'
 
 const OS_ICONS: Record<string, string> = {
   ubuntu: 'fl-ubuntu', debian: 'fl-debian', centos: 'fl-centos',
@@ -54,8 +48,43 @@ export const PERIOD_LABELS: Record<string, string> = {
   '30d': '过去30天',
 }
 
+/** 统一成可用的国旗代码，认不出来就归到联合国旗 */
+export function flagCode(code?: string) {
+  const value = (code || '').trim().toLowerCase()
+  return /^[a-z]{2}$/.test(value) ? value : UNKNOWN_FLAG
+}
+
+/** 纯文本回落用的 emoji 国旗，按 ISO 代码直接合成 */
 export function countryFlag(code?: string) {
-  return COUNTRY_FLAGS[(code || '').toLowerCase()] || '🌍'
+  const value = (code || '').trim().toLowerCase()
+  if (!/^[a-z]{2}$/.test(value)) return '🌍'
+  return String.fromCodePoint(...[...value].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 97))
+}
+
+const flagCache = new Map<string, string>()
+
+/** 本地内置 SVG 国旗的 data URI，不依赖任何 CDN */
+export function flagSrc(code?: string) {
+  const value = flagCode(code)
+  const cached = flagCache.get(value)
+  if (cached !== undefined) return cached
+  let uri = ''
+  for (const name of [value, UNKNOWN_FLAG]) {
+    try {
+      const svg = readFileSync(join(FLAG_DIR, name + '.svg'))
+      uri = 'data:image/svg+xml;base64,' + svg.toString('base64')
+      break
+    } catch {
+      /* 试下一个 */
+    }
+  }
+  flagCache.set(value, uri)
+  return uri
+}
+
+/** 测试用：清掉国旗缓存 */
+export function resetFlagCache() {
+  flagCache.clear()
 }
 
 export function osIcon(platform?: string) {
