@@ -7,6 +7,7 @@ const httpMod = require('@koishijs/plugin-http')
 const httpPlugin = httpMod.default || httpMod
 const plugin = require('../lib/index.js')
 const render = require('../lib/render.js')
+const { NezhaApi } = require('../lib/api.js')
 
 const TOKEN = 'test-token'
 const HOUR = 3600 * 1000
@@ -296,7 +297,13 @@ async function main() {
   const pagedText = (await paged.receive('nezha 状态')).join('\n')
   assert.ok(pagedText.includes('东京-02') || pagedText.includes('香港-01'), '分页列表为空')
 
-  console.log('17. 模板渲染')
+  console.log('17. 国家代码兜底')
+  const probe = new NezhaApi({ http: {}, logger: { debug() {}, warn() {}, error() {} } }, { cacheTTL: 0 })
+  assert.strictEqual(probe.parseServer({ id: 9, name: 'ws', country_code: 'JP' }).geoipCountry, 'jp', '实时流的顶层 country_code 没读')
+  assert.strictEqual(probe.parseServer({ id: 9, name: 'rest', geoip: { country_code: 'de' } }).geoipCountry, 'de', 'geoip.country_code 没读')
+  assert.strictEqual(probe.parseServer({ id: 9, name: 'none' }).geoipCountry, '', '没有国家代码时应为空')
+
+  console.log('18. 模板渲染')
   const config = { enableImage: false, maxTextLength: 1800 }
   render.resetRenderCache()
   const renderCtx = { http: { get: async () => { throw new Error('offline') } }, logger: { debug() {}, warn() {}, error() {} } }
@@ -314,7 +321,7 @@ async function main() {
   assert.ok(detailHtml.includes('0.42 / 0.21 / 0.11'), '负载没进模板')
   assert.ok(detailHtml.includes('data:image/png;base64,'), 'logo 没内联')
 
-  console.log('18. 告警 / 在线率 / 关联查询')
+  console.log('19. 告警 / 在线率 / 关联查询')
   const alertText = (await client.receive('nezha 告警')).join('')
   assert.ok(alertText.includes('CPU 过高') && alertText.includes('CPU ≥ 80'), '告警规则缺失: ' + alertText)
   const rateText = (await client.receive('nezha 在线率 1')).join('')
@@ -324,7 +331,7 @@ async function main() {
   const vsText = (await client.receive('nezha 服务服务器 1')).join('')
   assert.ok(vsText.includes('香港-01'), '服务关联服务器缺失')
 
-  console.log('19. 告警对象渲染 / 限流 / 推送测试')
+  console.log('20. 告警对象渲染 / 限流 / 推送测试')
   const ruleText = (await client.receive('nezha 告警')).join('')
   assert.ok(ruleText.includes('CPU ≥ 80') && ruleText.includes('持续 60s'), '告警条件没解析: ' + ruleText)
   assert.ok(ruleText.includes('香港-01'), '告警对象没换成名字: ' + ruleText)
@@ -349,13 +356,13 @@ async function main() {
   await pushClient.receive('nezha 推送测试 mock:999:123')
   assert.ok(sent.some(([channel]) => channel === '123'), '指定频道没生效: ' + JSON.stringify(sent))
 
-  console.log('20. 概览 / 服务延迟曲线')
+  console.log('21. 概览 / 服务延迟曲线')
   const overview = (await client.receive('nezha 概览')).join('\n')
   assert.ok(overview.includes('香港-01') && overview.includes('24h 在线率'), '概览不完整: ' + overview)
   const svcDetail = (await client.receive('nezha 服务详情 1')).join('\n')
   assert.ok(svcDetail.includes('延迟') && svcDetail.includes('ms'), '服务延迟曲线没出: ' + svcDetail)
 
-  console.log('21. 游客模式 / 英文')
+  console.log('22. 游客模式 / 英文')
   allowGuest = true
   const guest = await boot({ apiToken: '' })
   assert.ok((await guest.receive('nezha 状态')).join('\n').includes('香港-01'), '游客模式读不到数据')
@@ -366,10 +373,10 @@ async function main() {
   assert.ok((await en.receive('nezha 帮助')).join('').includes('Query a Nezha'), '英文帮助没生效')
   assert.ok((await en.receive('nezha 历史 1 nope')).join('').includes('Unsupported metric'), '英文错误没生效')
 
-  console.log('22. 帮助')
+  console.log('23. 帮助')
   assert.ok((await client.receive('nezha 帮助')).join('').includes('nezha 状态'))
 
-  console.log('23. 长文本分片')
+  console.log('24. 长文本分片')
   const short = await boot({ maxTextLength: 120 })
   const parts = await short.receive('nezha 状态')
   assert.ok(parts.length > 1, '未分片')

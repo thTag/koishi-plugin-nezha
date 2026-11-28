@@ -241,7 +241,8 @@ export class NezhaApi {
       netInSpeed: safeInt(state.net_in_speed),
       netOutSpeed: safeInt(state.net_out_speed),
       lastActive,
-      geoipCountry: geoip.country_code || '',
+      // REST 列表带 geoip.country_code；实时流 /ws/server 没有 geoip，只有顶层 country_code
+      geoipCountry: String(geoip.country_code || raw?.country_code || '').toLowerCase(),
     }
   }
 

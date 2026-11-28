@@ -1,5 +1,10 @@
 # 变更记录
 
+## 1.0.4
+
+- 修复实时流（`watch.enabled`）下国旗全部变联合国旗：面板的 `/ws/server` 帧没有 `geoip`，只有顶层 `country_code`，之前只读前者
+- 补一条回归测试：实时流形态、REST 形态、完全无国家代码三种输入
+
 ## 1.0.3
 
 - 国旗改为内置 SVG（`assets/flags`）并内联成 data URI，不再依赖 jsDelivr：断外网、被墙都不再退化成蓝色「US/HK/CN」字母块
