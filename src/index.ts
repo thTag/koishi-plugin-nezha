@@ -201,8 +201,12 @@ export function apply(ctx: Context, config: NezhaConfig) {
         const need = Math.max(0, config.pushTestAuthority || 0)
         const authority = Number((session as any)?.authority ?? (session!.user as any)?.authority ?? 0)
         if (authority < need) return await deliver(session!, L('needAuthority', need))
-        const count = await pusher.sendTest(channel)
-        await deliver(session!, count ? L('pushSent', count) : L('pushNoChannel'))
+        const result = await pusher.sendTest(channel)
+        if (!result) return await deliver(session!, L('pushNoChannel'))
+        if (!result.ok) return await deliver(session!, L('pushTestFail', result.error || '未知错误'))
+        await deliver(session!, result.ok < result.attempted
+          ? L('pushSentPart', result.ok, result.attempted)
+          : L('pushSent', result.ok))
       } catch (error) {
         await deliver(session!, L('pushTestFail', String((error as Error)?.message || error)))
       }

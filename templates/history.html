@@ -15,14 +15,14 @@
         display: flex;
         align-items: flex-start;
         justify-content: center;
-        padding: 30px;
+        padding: 20px;
     }
     .container {
-        width: 760px;
+        width: 430px;
         max-width: 100%;
         background: #111111;
-        border-radius: 32px;
-        padding: 32px 36px 26px;
+        border-radius: 26px;
+        padding: 22px 20px 18px;
         box-shadow: 0 30px 60px rgba(0, 0, 0, 0.9);
         border: 1px solid rgba(255, 255, 255, 0.05);
     }
@@ -51,7 +51,11 @@
         gap: 10px;
     }
     .header h1 {
-        font-size: 22px;
+        font-size: 19px;
+        max-width: 300px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
         font-weight: 700;
         color: #e9eeff;
     }
@@ -66,11 +70,11 @@
 
     .stats-grid {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: 1fr 1fr;
         gap: 12px;
         background: rgba(255,255,255,0.02);
         border-radius: 16px;
-        padding: 16px 20px;
+        padding: 14px 16px;
         border: 1px solid rgba(255,255,255,0.05);
         margin-bottom: 24px;
     }
@@ -90,7 +94,7 @@
     }
     .chart-svg {
         width: 100%;
-        height: 200px;
+        height: 280px;
         display: block;
     }
     .chart-labels {
@@ -113,9 +117,8 @@
         gap: 12px;
     }
     .footer .brand { color: #6a7a9a; }
-    @media (max-width: 600px) {
-        .stats-grid { grid-template-columns: 1fr 1fr; }
-    }
+    .header-top .title { font-size: 18px; }
+    .stats-grid .item .value { font-size: 18px; }
 </style>
 </head>
 <body>
@@ -125,7 +128,7 @@
         <span class="title">{{ site_name }}</span>
     </div>
     <div class="header">
-        <h1><span class="emoji">📈</span> {{ server_name }} - {{ metric_name }}</h1>
+        <h1>{{ server_name }} · {{ metric_name }}</h1>
         <span class="period-badge">{{ period_label }}</span>
     </div>
 
@@ -137,25 +140,26 @@
     </div>
 
     <div class="chart-container">
-        <svg class="chart-svg" viewBox="0 0 700 200" preserveAspectRatio="xMidYMid meet">
+        <svg class="chart-svg" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet">
             <!-- 网格线 -->
-            <line x1="40" y1="30" x2="680" y2="30" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
-            <line x1="40" y1="72" x2="680" y2="72" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
-            <line x1="40" y1="115" x2="680" y2="115" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
-            <line x1="40" y1="157" x2="680" y2="157" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+            <line x1="36" y1="50" x2="384" y2="50" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+            <line x1="36" y1="100" x2="384" y2="100" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+            <line x1="36" y1="150" x2="384" y2="150" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+            <line x1="36" y1="200" x2="384" y2="200" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+            <line x1="36" y1="250" x2="384" y2="250" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
 
             <!-- Y轴标签 -->
-            <text x="35" y="34" font-size="10" fill="#4a5a7a" text-anchor="end">100%</text>
-            <text x="35" y="76" font-size="10" fill="#4a5a7a" text-anchor="end">75%</text>
-            <text x="35" y="119" font-size="10" fill="#4a5a7a" text-anchor="end">50%</text>
-            <text x="35" y="161" font-size="10" fill="#4a5a7a" text-anchor="end">25%</text>
-            <text x="35" y="185" font-size="10" fill="#4a5a7a" text-anchor="end">0%</text>
+            <text x="30" y="54" font-size="11" fill="#4a5a7a" text-anchor="end">100%</text>
+            <text x="30" y="104" font-size="11" fill="#4a5a7a" text-anchor="end">75%</text>
+            <text x="30" y="154" font-size="11" fill="#4a5a7a" text-anchor="end">50%</text>
+            <text x="30" y="204" font-size="11" fill="#4a5a7a" text-anchor="end">25%</text>
+            <text x="30" y="254" font-size="11" fill="#4a5a7a" text-anchor="end">0%</text>
 
             <!-- 面积填充 -->
-            <polygon points="40,175 {{ points }} 680,175" fill="#60a5fa" opacity="0.16"/>
+            <polygon points="36,255 {{ points }} 384,255" fill="#60a5fa" opacity="0.16"/>
 
             <!-- 折线 -->
-            <polyline points="{{ points }}" fill="none" stroke="#60a5fa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="{{ points }}" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 
         </svg>
         <div class="chart-labels">

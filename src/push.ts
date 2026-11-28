@@ -1,7 +1,7 @@
 import { Context } from 'koishi'
 import { formatBytes, formatDateTime, percent } from './format'
 import type { NezhaApi } from './api'
-import type { Config, ServerInfo } from './types'
+import type { Config, PushResult, ServerInfo } from './types'
 
 /** 定时推送概览 + 阈值/离线告警，同一告警有冷却，恢复时补一条 */
 export class Pusher {
@@ -91,32 +91,60 @@ export class Pusher {
     }
   }
 
-  /** 测试推一条；不传频道就发给配置里的全部频道，返回实际发送数 */
-  async sendTest(channel?: string) {
+  /** 测试推一条；不传频道就发给配置里的全部频道 */
+  async sendTest(channel?: string): Promise<PushResult | undefined> {
     const channels = (channel ? [channel] : this.config.push.channels || []).filter(Boolean)
-    if (!channels.length) return 0
-    await this.send(channels, '🔔 nezha 推送测试 · ' + formatDateTime())
-    return channels.length
+    if (!channels.length) return undefined
+    return this.send(channels, '🔔 nezha 推送测试 · ' + formatDateTime())
   }
 
-  private async send(channels: string[], content: string) {
+  /** 同平台可能有多个 bot（父 bot、各自身份），在线且非隐藏的优先 */
+  private botsFor(platform: string, selfId: string) {
+    const pool = this.ctx.bots.filter((item) => item.platform === platform)
+    const exact = selfId ? pool.filter((item) => item.selfId === selfId) : pool
+    return (exact.length ? exact : pool).sort((a, b) => this.score(b) - this.score(a))
+  }
+
+  private score(bot: any) {
+    return (bot.status === 'online' ? 2 : 0) + (bot.hidden ? 0 : 1)
+  }
+
+  /** 纯数字频道号可能是私聊，末位补一次 private: 再试 */
+  private targets(id: string) {
+    return /^\d+$/.test(id) ? [id, 'private:' + id] : [id]
+  }
+
+  private async send(channels: string[], content: string): Promise<PushResult> {
+    const result: PushResult = { attempted: 0, ok: 0 }
     for (const channel of channels) {
       const parts = channel.split(':')
       const platform = parts[0]
       const selfId = parts.length >= 3 ? parts[1] : ''
       const id = parts.slice(selfId ? 2 : 1).join(':')
-      const bot = (selfId
-        ? this.ctx.bots.find((item) => item.platform === platform && item.selfId === selfId)
-        : undefined) || this.ctx.bots.find((item) => item.platform === platform)
-      if (!bot || !id) {
+      const bots = this.botsFor(platform, selfId)
+      if (!bots.length || !id) {
+        result.attempted++
+        result.error = '没有可用 bot（格式 platform[:selfId]:channelId）'
         this.ctx.logger.warn('推送频道 %s 没有可用 bot（格式 platform[:selfId]:channelId）', channel)
         continue
       }
-      try {
-        await bot.sendMessage(id, content)
-      } catch (error) {
-        this.ctx.logger.warn('推送到 %s 失败: %s', channel, (error as Error).message)
+      result.attempted++
+      let done = false
+      for (const bot of bots) {
+        for (const target of this.targets(id)) {
+          try {
+            await bot.sendMessage(target, content)
+            done = true
+            break
+          } catch (error) {
+            result.error = (error as Error)?.message || String(error)
+          }
+        }
+        if (done) break
       }
+      if (done) result.ok++
+      else this.ctx.logger.warn('推送到 %s 失败: %s', channel, result.error)
     }
+    return result
   }
 }

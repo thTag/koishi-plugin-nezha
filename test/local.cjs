@@ -184,7 +184,7 @@ function pluginServer(raw) {
 }
 
 const fakePage = {
-  setViewport() {},
+  setViewport(size) { fakePage.viewport = size },
   async setContent() {},
   async screenshot() { return Buffer.from('fake-png') },
   async close() {},
@@ -268,6 +268,7 @@ async function main() {
   await img.app.start()
   const imgReplies = await img.app.mock.client('10001').receive('nezha 状态')
   assert.ok(imgReplies.join('').includes('<img'), '没出图')
+  assert.strictEqual(fakePage.viewport?.width, 470, '视口不是窄长条: ' + JSON.stringify(fakePage.viewport))
 
   console.log('13. 出图失败降级文字')
   const broken = makeApp({ enableImage: true })
@@ -317,6 +318,12 @@ async function main() {
   assert.ok(!/<link rel="stylesheet"/.test(html), '还在依赖外部样式表')
   assert.ok(!html.includes('🖥️'), '总计还带 emoji')
   assert.ok(html.includes('<span class="online-dot"></span>'), '在线圆点没改成 CSS 圆点')
+  assert.ok(html.includes('class="bar-track"'), '状态卡没有进度条')
+  assert.ok(html.includes('class="server-meta"'), '状态卡没有系统/运行时间行')
+  const listHtml = await render.buildHtml(renderCtx, config, 'service_list', render.serviceListData([
+    { id: 1, name: '站点A', status: 1, avgDelay: 12, upPercent: 99, currentUp: 1, currentDown: 0, totalUp: 10, totalDown: 1 },
+  ]))
+  assert.ok(listHtml.includes('bar-fill') && listHtml.includes('99.00%'), '服务列表没出可用率条')
   const detailHtml = await render.buildHtml(renderCtx, config, 'server_detail', render.detailData({ ...pluginServer(servers[0]), cpuCores: 1, load1: 0.42, load5: 0.21, load15: 0.11, tcpConn: 28, udpConn: 7, processCount: 134, arch: 'x86_64', bootTime: 1786127253, netInSpeed: 2048, netOutSpeed: 1024, swapUsed: 0, swapTotal: 536866816 }))
   assert.ok(detailHtml.includes('0.42 / 0.21 / 0.11'), '负载没进模板')
   assert.ok(detailHtml.includes('data:image/png;base64,'), 'logo 没内联')
@@ -355,6 +362,27 @@ async function main() {
   sent.length = 0
   await pushClient.receive('nezha 推送测试 mock:999:123')
   assert.ok(sent.some(([channel]) => channel === '123'), '指定频道没生效: ' + JSON.stringify(sent))
+
+  // 推送投递细节（假 bot，不走会话）：父 bot 没 _request 时换下一个，纯数字补 private: 再试
+  const { Pusher } = require('../lib/push.js')
+  const quiet = { warn() {}, info() {}, error() {}, debug() {} }
+  const makePusher = (bots) => new Pusher({ bots, logger: quiet }, { push: { channels: [], cooldown: 0 } }, null)
+  const calls = []
+  const brokenParent = { platform: 'onebot', selfId: '1', status: 'connect', hidden: false, sendMessage: async () => { throw new Error('this._request is not a function') } }
+  const goodChild = { platform: 'onebot', selfId: '2', status: 'online', hidden: false, sendMessage: async (channel) => { calls.push(channel); return 'ok' } }
+  const viaChild = await makePusher([brokenParent, goodChild]).sendTest('onebot:9')
+  assert.deepStrictEqual([viaChild.attempted, viaChild.ok], [1, 1], '没换到可用的 bot: ' + JSON.stringify(viaChild))
+  assert.deepStrictEqual(calls, ['9'], '频道号被改写: ' + JSON.stringify(calls))
+  calls.length = 0
+  const privateOnly = { platform: 'onebot', selfId: '1', status: 'online', hidden: false, sendMessage: async (channel) => { if (/^\d+$/.test(channel)) throw new Error('not a group'); calls.push(channel); return 'ok' } }
+  const viaPrivate = await makePusher([privateOnly]).sendTest('onebot:1032317814')
+  assert.strictEqual(viaPrivate.ok, 1, '私聊回落没生效: ' + JSON.stringify(viaPrivate))
+  assert.deepStrictEqual(calls, ['private:1032317814'], '私聊回落频道不对: ' + JSON.stringify(calls))
+  const dead = { platform: 'onebot', selfId: '1', status: 'online', hidden: false, sendMessage: async () => { throw new Error('boom') } }
+  const deadResult = await makePusher([dead]).sendTest('onebot:1')
+  assert.deepStrictEqual([deadResult.attempted, deadResult.ok, deadResult.error], [1, 0, 'boom'], '全失败没回报: ' + JSON.stringify(deadResult))
+  const noBot = await makePusher([dead]).sendTest('kook:1')
+  assert.deepStrictEqual([noBot.attempted, noBot.ok], [1, 0], '没有对应平台 bot 时也应计一次')
 
   console.log('21. 概览 / 服务延迟曲线')
   const overview = (await client.receive('nezha 概览')).join('\n')

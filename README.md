@@ -44,7 +44,8 @@
 - CPU / 内存 / 磁盘阈值（`thresholdCpu` / `thresholdMem` / `thresholdDisk`，0 关闭）
 - 离线告警（`push.offline`），恢复时补一条
 - 同一告警有 `push.cooldown` 分钟冷却，避免刷屏
-- 频道格式 `platform[:selfId]:channelId`；配好多半是错的，先 `nezha 推送测试` 验一条（默认要权限 3，`pushTestAuthority` 可调）
+- 频道格式 `platform[:selfId]:channelId`，私聊直接写对方账号（如 `onebot:1032317814`）：纯数字频道号会先按原样发，失败自动补 `private:` 再试，同平台多个 bot 会依次尝试
+- 配好先 `nezha 推送测试` 验一条（默认要权限 3，`pushTestAuthority` 可调），成功/失败都会回报结果
 
 ### 实时状态流
 
@@ -83,7 +84,7 @@ plugins:
     push:
       enabled: false
       interval: 30                            # 间隔（分钟）
-      channels: ['onebot:123456']             # platform:channelId
+      channels: ['onebot:1032317814']         # platform:channelId，私聊直接写账号
       thresholdCpu: 90
       thresholdMem: 90
       thresholdDisk: 90
@@ -100,7 +101,7 @@ plugins:
 
 ## 出图与降级
 
-5 个页面各有一套 HTML 模板（`templates/`），走 puppeteer 截图：
+5 个页面各有一套 HTML 模板（`templates/`），走 puppeteer 截图，统一出**竖版长图**（视口 470px），一台服务器一行、每项指标带进度条，方便手机上一条条往下看：
 
 - 没装 puppeteer、浏览器起不来、截图超时——记一条 warn 后改发文字，不会卡住命令
 - 国旗（`assets/flags/*.svg`）、系统图标字体（`assets/font-logos.woff2`）、logo 全部内联进包并转成 data URI，**断外网也不缺图**，无需任何 CDN

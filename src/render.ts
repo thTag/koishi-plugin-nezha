@@ -80,7 +80,7 @@ export async function renderCard(
   const page = await (ctx as any).puppeteer.page()
   try {
     if (typeof (page as any).setViewport === 'function') {
-      await (page as any).setViewport({ width: 820, height: 600, deviceScaleFactor: 2 })
+      await (page as any).setViewport({ width: 470, height: 800, deviceScaleFactor: 2 })
     }
     await page.setContent(html, { waitUntil: 'load', timeout: config.renderTimeout })
     const shot: any = await page.screenshot({ type: 'png', fullPage: true })
@@ -105,8 +105,14 @@ export function statusData(servers: ServerInfo[]) {
       name: s.name,
       online: s.online,
       cpu: s.cpu,
+      cpu_bar: usageBar(s.cpu || 0),
       mem_percent: percent(s.memUsed, s.memTotal),
+      mem_bar: usageBar(percent(s.memUsed, s.memTotal)),
       disk_percent: percent(s.diskUsed, s.diskTotal),
+      disk_bar: usageBar(percent(s.diskUsed, s.diskTotal)),
+      platform: (s.platform || 'N/A') + (s.platformVersion ? ' ' + s.platformVersion : ''),
+      uptime: formatUptime(s.uptime || 0),
+      load1: (s.load1 || 0).toFixed(2),
       os_icon: osIcon(s.platform),
       country_code: (s.geoipCountry || 'un').toLowerCase(),
       flag: countryFlag(s.geoipCountry),
@@ -179,6 +185,9 @@ export function serviceListData(services: ServiceItem[]) {
         status: st.text,
         status_class: st.cls,
         up_percent: s.upPercent,
+        up_bar: s.upPercent >= 95 ? '#4ade80' : s.upPercent >= 80 ? '#fbbf24' : '#f87171',
+        checks: s.totalUp + s.totalDown,
+        current_up: s.currentUp,
         avg_delay: s.avgDelay > 0 ? s.avgDelay.toFixed(1) + 'ms' : 'N/A',
       }
     }),
@@ -198,6 +207,7 @@ export function serviceDetailData(detail: ServiceDetail) {
     return {
       server_name: svr.serverName,
       up_percent: svr.upPercent,
+      up_bar: svr.upPercent >= 95 ? '#4ade80' : svr.upPercent >= 50 ? '#f87171' : '#fbbf24',
       avg_delay: svr.avgDelay > 0 ? svr.avgDelay.toFixed(1) + 'ms' : 'N/A',
       status_class: statusClass,
       status_text: svr.upPercent >= 95 ? '连接正常' : '连接异常',
@@ -296,8 +306,8 @@ export function analyzeHistory(rawPoints: { ts: number; value: number }[], optio
     const range = hi !== lo ? hi - lo : 1
     points = smooth
       .map((v, i) => {
-        const x = (i / Math.max(smooth.length - 1, 1)) * 600
-        const y = 140 - ((v - lo) / range) * 120 - 10
+        const x = 36 + (i / Math.max(smooth.length - 1, 1)) * 348
+        const y = 250 - ((v - lo) / range) * 200
         return x.toFixed(1) + ',' + y.toFixed(1)
       })
       .join(' ')

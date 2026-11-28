@@ -16,66 +16,62 @@
         display: flex;
         align-items: flex-start;
         justify-content: center;
-        padding: 30px;
+        padding: 20px;
     }
     .dashboard {
-        width: 960px;
+        width: 430px;
         max-width: 100%;
         background: #111111;
-        border-radius: 32px;
-        padding: 32px 36px 26px;
+        border-radius: 26px;
+        padding: 22px 20px 18px;
         box-shadow: 0 30px 60px rgba(0, 0, 0, 0.9);
         border: 1px solid rgba(255, 255, 255, 0.05);
     }
 
-    .header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 30px;
-        flex-wrap: wrap;
-        gap: 14px 20px;
-    }
+    .header { margin-bottom: 18px; }
     .header-left {
         display: flex;
         align-items: center;
-        gap: 16px;
+        gap: 12px;
+        margin-bottom: 14px;
     }
     .logo {
-        height: 48px;
+        height: 38px;
         width: auto;
         display: block;
+        flex-shrink: 0;
     }
     .header h1 {
-        font-size: 30px;
+        font-size: 22px;
         font-weight: 700;
         color: #e9eeff;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
     }
     .stats {
         display: flex;
-        gap: 18px;
+        gap: 8px;
         flex-wrap: wrap;
     }
     .stat-item {
         background: rgba(255, 255, 255, 0.05);
-        padding: 8px 22px 8px 18px;
-        border-radius: 40px;
-        font-size: 16px;
+        padding: 6px 14px 6px 12px;
+        border-radius: 30px;
+        font-size: 14px;
         font-weight: 500;
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 6px;
         border: 1px solid rgba(255, 255, 255, 0.05);
         color: #b0c4e0;
     }
-    .stat-item .num { font-weight: 700; color: #f0f4ff; margin-left: 4px; }
+    .stat-item .num { font-weight: 700; color: #f0f4ff; }
     .stat-item .online-dot,
     .stat-item .offline-dot {
         display: inline-block;
-        width: 10px;
-        height: 10px;
+        width: 9px;
+        height: 9px;
         border-radius: 50%;
-        vertical-align: middle;
     }
     .stat-item .online-dot { background: #4ade80; }
     .stat-item .offline-dot { background: #f87171; }
@@ -84,102 +80,55 @@
         display: flex;
         flex-direction: column;
         gap: 10px;
-        margin-top: 4px;
     }
     .server-card {
         background: rgba(255, 255, 255, 0.025);
         border-radius: 16px;
-        padding: 14px 22px;
+        padding: 12px 14px 14px;
         border: 1px solid rgba(255, 255, 255, 0.05);
         display: flex;
-        align-items: center;
-        justify-content: space-between;
-        flex-wrap: nowrap;
-        gap: 10px 16px;
-        transition: opacity 0.2s;
+        flex-direction: column;
+        gap: 9px;
     }
     .server-card.offline {
         opacity: 0.55;
         border-color: rgba(255, 100, 100, 0.1);
     }
-
-    .server-info {
+    .server-head {
         display: flex;
         align-items: center;
-        gap: 14px;
+        gap: 10px;
         min-width: 0;
-        flex-shrink: 1;
     }
     .flag-icon {
-        width: 32px;
-        height: 24px;
+        width: 26px;
+        height: 19px;
         flex-shrink: 0;
         object-fit: cover;
         border-radius: 3px;
         background: #2a3140;
     }
     .server-name {
-        display: block;
         flex: 1 1 auto;
         min-width: 0;
-        font-size: 20px;
+        font-size: 17px;
         font-weight: 600;
         color: #f0f6ff;
         letter-spacing: -0.2px;
         white-space: nowrap;
-        max-width: 120px;
         overflow: hidden;
         text-overflow: ellipsis;
-    }
-    .os-icon {
-        font-size: 22px;
-        opacity: 0.6;
-        margin-left: 4px;
-    }
-
-    .server-resources {
-        display: flex;
-        align-items: center;
-        gap: 24px;
-        flex-wrap: nowrap;
-        flex: 1 1 auto;
-        justify-content: center;
-        white-space: nowrap;
-    }
-    .resource-item {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 16px;
-        font-weight: 500;
-        color: #b0c4e0;
-    }
-    .resource-item .value {
-        font-weight: 600;
-        font-variant-numeric: tabular-nums;
-        min-width: 52px;
-        text-align: right;
-        font-size: 17px;
-        transition: color 0.2s ease;
-    }
-    .resource-item .value.green { color: #4ade80; }
-    .resource-item .value.yellow { color: #fbbf24; }
-    .resource-item .value.red { color: #f87171; }
-
-    .server-status {
-        display: flex;
-        align-items: center;
-        flex-shrink: 0;
     }
     .status-badge {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
+        gap: 6px;
+        flex-shrink: 0;
         background: rgba(74, 222, 128, 0.12);
         color: #4ade80;
-        padding: 6px 18px 6px 14px;
-        border-radius: 40px;
-        font-size: 15px;
+        padding: 4px 12px 4px 10px;
+        border-radius: 30px;
+        font-size: 13px;
         font-weight: 600;
         border: 1px solid rgba(74, 222, 128, 0.1);
     }
@@ -189,44 +138,73 @@
         border-color: rgba(248, 113, 113, 0.1);
     }
     .status-dot {
-        width: 10px;
-        height: 10px;
+        width: 8px;
+        height: 8px;
         border-radius: 50%;
         background: #4ade80;
         display: inline-block;
-        box-shadow: 0 0 10px rgba(74, 222, 128, 0.25);
     }
-    .status-dot.offline {
-        background: #f87171;
-        box-shadow: 0 0 10px rgba(248, 113, 113, 0.2);
+    .status-dot.offline { background: #f87171; }
+
+    .server-meta {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12.5px;
+        color: #7b8aa6;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
+    .os-icon {
+        font-size: 14px;
+        opacity: 0.75;
+    }
+
+    .metric {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        color: #93a3bd;
+    }
+    .metric-label { width: 32px; flex-shrink: 0; }
+    .bar-track {
+        flex: 1 1 auto;
+        height: 7px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.07);
+        overflow: hidden;
+    }
+    .bar-fill {
+        display: block;
+        height: 100%;
+        border-radius: 4px;
+        min-width: 2px;
+    }
+    .metric .value {
+        width: 52px;
+        flex-shrink: 0;
+        text-align: right;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        color: #dbe6f6;
+    }
+    .metric .value.green { color: #4ade80; }
+    .metric .value.yellow { color: #fbbf24; }
+    .metric .value.red { color: #f87171; }
 
     .footer {
-        margin-top: 26px;
-        padding-top: 18px;
+        margin-top: 18px;
+        padding-top: 14px;
         border-top: 1px solid rgba(255, 255, 255, 0.05);
         display: flex;
-        justify-content: flex-end;
-        font-size: 14px;
+        justify-content: center;
+        gap: 8px;
+        font-size: 12.5px;
         color: #4a5a7a;
-        gap: 10px;
     }
     .footer .brand { color: #6a7a9a; }
-
-    @media (max-width: 800px) {
-        body { padding: 16px; }
-        .dashboard { padding: 20px; border-radius: 24px; }
-        .header { flex-direction: column; align-items: stretch; }
-        .stats { justify-content: flex-start; }
-        .server-card { flex-wrap: wrap; gap: 8px 14px; }
-        .server-resources { justify-content: flex-start; gap: 16px; }
-        .logo { height: 38px; }
-        .header h1 { font-size: 24px; }
-        .server-name { font-size: 17px; }
-        .resource-item { font-size: 14px; }
-        .resource-item .value { font-size: 15px; min-width: 44px; }
-        .status-badge { font-size: 13px; padding: 4px 14px 4px 10px; }
-    }
 </style>
 </head>
 <body>
@@ -246,30 +224,43 @@
     <div class="server-grid">
         {% for server in servers %}
         <div class="server-card {% if not server.online %}offline{% endif %}">
-            <div class="server-info">
+            <div class="server-head">
                 <img class="flag-icon" src="{{ server.flag_src }}" alt="{{ server.country_code }}" />
                 <span class="server-name">{{ server.name }}</span>
-                {% if server.os_icon %}
-                <span class="os-icon {{ server.os_icon }}"></span>
-                {% endif %}
-            </div>
-
-            <div class="server-resources">
-                {% set cpu = server.cpu|default(0) %}
-                <span class="resource-item">CPU <span class="value {% if cpu >= 90 %}red{% elif cpu >= 70 %}yellow{% else %}green{% endif %}">{{ '%.1f'|format(cpu) }}%</span></span>
-
-                {% set mem = server.mem_percent|default(0) %}
-                <span class="resource-item">内存 <span class="value {% if mem >= 90 %}red{% elif mem >= 70 %}yellow{% else %}green{% endif %}">{{ '%.1f'|format(mem) }}%</span></span>
-
-                {% set disk = server.disk_percent|default(0) %}
-                <span class="resource-item">磁盘 <span class="value {% if disk >= 90 %}red{% elif disk >= 70 %}yellow{% else %}green{% endif %}">{{ '%.1f'|format(disk) }}%</span></span>
-            </div>
-
-            <div class="server-status">
                 <span class="status-badge {% if not server.online %}offline{% endif %}">
                     <span class="status-dot {% if not server.online %}offline{% endif %}"></span>
                     {{ '在线' if server.online else '离线' }}
                 </span>
+            </div>
+
+            <div class="server-meta">
+                {% if server.os_icon %}<span class="os-icon {{ server.os_icon }}"></span>{% endif %}
+                <span>{{ server.platform }}</span>
+                <span>·</span>
+                <span>运行 {{ server.uptime }}</span>
+                <span>·</span>
+                <span>负载 {{ server.load1 }}</span>
+            </div>
+
+            {% set cpu = server.cpu|default(0) %}
+            <div class="metric">
+                <span class="metric-label">CPU</span>
+                <span class="bar-track"><span class="bar-fill" style="width: {{ '%.1f'|format(cpu) }}%; background: {{ server.cpu_bar }}"></span></span>
+                <span class="value {% if cpu >= 90 %}red{% elif cpu >= 70 %}yellow{% else %}green{% endif %}">{{ '%.1f'|format(cpu) }}%</span>
+            </div>
+
+            {% set mem = server.mem_percent|default(0) %}
+            <div class="metric">
+                <span class="metric-label">内存</span>
+                <span class="bar-track"><span class="bar-fill" style="width: {{ '%.1f'|format(mem) }}%; background: {{ server.mem_bar }}"></span></span>
+                <span class="value {% if mem >= 90 %}red{% elif mem >= 70 %}yellow{% else %}green{% endif %}">{{ '%.1f'|format(mem) }}%</span>
+            </div>
+
+            {% set disk = server.disk_percent|default(0) %}
+            <div class="metric">
+                <span class="metric-label">磁盘</span>
+                <span class="bar-track"><span class="bar-fill" style="width: {{ '%.1f'|format(disk) }}%; background: {{ server.disk_bar }}"></span></span>
+                <span class="value {% if disk >= 90 %}red{% elif disk >= 70 %}yellow{% else %}green{% endif %}">{{ '%.1f'|format(disk) }}%</span>
             </div>
         </div>
         {% endfor %}

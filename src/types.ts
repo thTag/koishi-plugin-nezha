@@ -1,5 +1,12 @@
 import type { Locale } from './i18n'
 
+/** 一次推送的结果，用于「推送测试」回报 */
+export interface PushResult {
+  attempted: number
+  ok: number
+  error?: string
+}
+
 export interface Config {
   baseUrl: string
   apiToken?: string
